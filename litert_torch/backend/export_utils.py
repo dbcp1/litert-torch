@@ -17,11 +17,11 @@
 import re
 from typing import Any, Sequence, cast
 from litert_torch.backend.lowerings import utils as lowering_utils
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import func
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import func
 import torch
 import torch.utils._pytree as pytree
-from ai_edge_litert.mlir._mlir_libs import converter_api_ext
+from litert_converter.mlir._mlir_libs import converter_api_ext
 
 # std::numeric_limits<int64_t>::min()
 IR_DYNAMIC = -9223372036854775808

@@ -17,8 +17,8 @@
 import jax
 from litert_torch import backend
 from litert_torch.backend import jax_bridge
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import func
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import func
 
 from absl.testing import absltest as googletest
 

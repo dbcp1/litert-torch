@@ -18,7 +18,7 @@ import re
 
 from litert_torch.backend import export
 from litert_torch.backend import export_utils
-from ai_edge_litert.mlir import passmanager
+from litert_converter.mlir import passmanager
 import tensorflow as tf
 import torch
 

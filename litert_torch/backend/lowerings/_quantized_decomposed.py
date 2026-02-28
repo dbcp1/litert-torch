@@ -19,8 +19,8 @@ from typing import Optional, Union, cast
 from litert_torch.backend.lowerings import context
 from litert_torch.backend.lowerings import registry
 from litert_torch.backend.lowerings import utils
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import stablehlo
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import stablehlo
 import torch
 import torch.ao.quantization.fx._decomposed
 import torch.utils._pytree as pytree

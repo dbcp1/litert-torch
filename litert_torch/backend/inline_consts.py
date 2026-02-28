@@ -20,8 +20,8 @@ import math
 from litert_torch import _config
 from litert_torch.backend import lowerings
 from litert_torch.backend.lowerings import utils as lowering_utils
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import arith
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import arith
 import numpy as np
 import torch
 

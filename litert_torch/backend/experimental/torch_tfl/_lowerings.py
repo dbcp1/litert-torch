@@ -20,8 +20,8 @@ from litert_torch.backend.experimental.torch_tfl import _ops
 from litert_torch.backend.lowerings import context
 from litert_torch.backend.lowerings import registry
 from litert_torch.backend.lowerings import utils as lowering_utils
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import stablehlo
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import stablehlo
 import numpy as np
 import torch
 

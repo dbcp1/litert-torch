@@ -23,11 +23,11 @@ from litert_torch._convert import signature
 from litert_torch.backend import inline_consts as inline_consts_lib
 from litert_torch.quantize import quant_config as qcfg
 from litert_torch.quantize import translate_recipe
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir import passmanager
+from litert_converter.mlir import ir
+from litert_converter.mlir import passmanager
 import torch
 
-from ai_edge_litert.mlir._mlir_libs import converter_api_ext
+from litert_converter.mlir._mlir_libs import converter_api_ext
 
 
 def _get_output_names(

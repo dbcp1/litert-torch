@@ -20,7 +20,7 @@ import jax.numpy as jnp
 from litert_torch.backend import jax_bridge
 from litert_torch.backend.lowerings import context
 from litert_torch.backend.lowerings import registry
-from ai_edge_litert.mlir import ir
+from litert_converter.mlir import ir
 import numpy as np
 import torch
 import torch_xla2.ops.jaten  # Import to load torch_xla2 ops
