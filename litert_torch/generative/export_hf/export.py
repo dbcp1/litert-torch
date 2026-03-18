@@ -23,7 +23,10 @@ import warnings
 from litert_torch import progress
 from litert_torch.generative.export_hf.core import export_lib
 from litert_torch.generative.export_hf.core import exportable_module
+from litert_torch.generative.export_hf.core import exportable_module_config
 from litert_torch.generative.export_hf.core import litert_lm_builder
+
+ExportTask = exportable_module_config.ExportTask
 
 
 @progress.task('LiteRT GenAI Export')
@@ -72,7 +75,7 @@ def run_export_tasks(
 def export(
     model: str,
     output_dir: str,
-    task: str = 'text_generation',
+    task: ExportTask | str = ExportTask.TEXT_GENERATION,
     keep_temporary_files: bool = False,
     # target_accelerator: str | None = None,
     # TODO(weiyiw): Remove the following flags.
@@ -96,6 +99,7 @@ def export(
     vision_encoder_quantization_recipe: str | None = None,
     litert_lm_model_type_override: str | None = None,
     litert_lm_llm_metadata_override: str | None = None,
+    experimental_lightweight_conversion: bool = False,
     # pylint: enable=unused-argument
     **kwargs,
 ):
@@ -187,7 +191,7 @@ def export(
   )
   if not export_config.bundle_litert_lm:
     keep_temporary_files = True
-  if not keep_temporary_files and not export_config.split_cache:
+  if not keep_temporary_files:
     print('Cleaning up temporary files.')
     shutil.rmtree(work_dir)
   print(

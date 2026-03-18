@@ -146,6 +146,6 @@ def apply_mixed_precision(
   mu_module, ctx = _litert_model_to_model_utils(model)
   with ctx:
     print("Applying mixed precision to model...")
-    mixed_precision.convert_to_fp16(mu_module, mixed_precision.fp32_predicate)
+    mixed_precision.convert_to_fp16(mu_module)
 
   return _model_utils_to_litert_model(mu_module, ctx)

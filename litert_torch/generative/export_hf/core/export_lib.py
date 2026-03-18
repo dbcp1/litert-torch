@@ -26,9 +26,12 @@ from litert_torch._convert import interface as converter_utils
 from litert_torch.backend.experimental import torch_tfl
 from litert_torch.generative.export_hf.core import attention as _
 from litert_torch.generative.export_hf.core import exportable_module
+from litert_torch.generative.export_hf.core import exportable_module_config
 from litert_torch.generative.export_hf.core import patches as _
 from litert_torch.generative.export_hf.core import utils
 from litert_torch.generative.export_hf.core.external_emb import exportable_module as external_emb_module
+
+ExportTask = exportable_module_config.ExportTask
 from litert_torch.generative.export_hf.core.external_rope import exportable_module as external_rope_module
 from litert_torch.generative.export_hf.core.external_rope import preprocess_model as external_rope_preprocess_model
 from litert_torch.generative.export_hf.core.mu import mu_pass_lib
@@ -113,7 +116,7 @@ def load_model(
     model_path: str,
     trust_remote_code: bool = False,
     auto_model_override: str | None = None,
-    task: str = 'text_generation',
+    task: ExportTask | str = ExportTask.TEXT_GENERATION,
 ) -> SourceModelArtifacts:
   """Loads model from checkpoint."""
 
@@ -124,9 +127,9 @@ def load_model(
   )
   config._attn_implementation = 'lrt_transposed_attention'  # pylint: disable=protected-access
 
-  if task == 'text_generation':
+  if task == ExportTask.TEXT_GENERATION:
     auto_model_cls = transformers.AutoModelForCausalLM
-  elif task == 'image_text_to_text':
+  elif task == ExportTask.IMAGE_TEXT_TO_TEXT:
     auto_model_cls = transformers.AutoModelForImageTextToText
   else:
     raise ValueError(f'Unsupported task: {task}')
@@ -141,7 +144,7 @@ def load_model(
         trust_remote_code=trust_remote_code,
     )
 
-  if task == 'text_generation':
+  if task == ExportTask.TEXT_GENERATION:
     model.generation_config.cache_implementation = 'static'
     model.generation_config.do_sample = False
 
@@ -149,13 +152,13 @@ def load_model(
   if hasattr(config, 'text_config'):
     text_model_config = config.text_config
 
-  if task == 'text_generation':
+  if task == ExportTask.TEXT_GENERATION:
     verify_model_compatibility(model, config, text_model_config)
   else:
     # TODO(weiyiw): Add support for other tasks.
     pass
 
-  if task == 'image_text_to_text':
+  if task == ExportTask.IMAGE_TEXT_TO_TEXT:
     image_processor = transformers.AutoImageProcessor.from_pretrained(
         model_path
     )
@@ -323,7 +326,7 @@ def export_text_prefill_decode_model(
     )
 
   lrt_model = converter.convert(
-      lightweight_conversion=True,
+      lightweight_conversion=export_config.experimental_lightweight_conversion,
       strict_export=False,
   )
 
@@ -414,7 +417,7 @@ def export_embedder_model(
         sample_kwargs=sample_inputs,
     )
   lrt_model = converter.convert(
-      lightweight_conversion=True,
+      lightweight_conversion=export_config.experimental_lightweight_conversion,
       strict_export=False,
   )
   model_path = os.path.join(work_dir, 'embedder.tflite')
@@ -523,9 +526,10 @@ def export_auxiliary_model(
         sample_kwargs=sample_input,
     )
   # Attention Mask
+  sliding_window_sizes = [getattr(text_model_config, 'sliding_window', None)]
   attention_mask_module = split_cache_module.SplitAttentionMaskBuilder(
       export_config.cache_length,
-      # TODO(weiyiw): Add sliding window sizes.
+      sliding_window_sizes=sliding_window_sizes,
   )
   sample_inputs = attention_mask_module.get_sample_inputs(
       text_model_config, export_config
@@ -626,6 +630,17 @@ def export_tokenizer(
   """Exports tokenizer."""
   tokenizer = source_model_artifacts.tokenizer
   work_dir = export_config.work_dir
+  if hasattr(tokenizer, 'vocab_file'):
+    tokenizer_path = tokenizer.vocab_file
+    if tokenizer_path.endswith('tokenizer.model'):
+      with open(tokenizer_path, 'rb') as f:
+        with open(os.path.join(work_dir, 'tokenizer.model'), 'wb') as f_out:
+          f_out.write(f.read())
+      tokenizer_path = os.path.join(work_dir, 'tokenizer.model')
+      return dataclasses.replace(
+          exported_model_artifacts,
+          tokenizer_model_path=tokenizer_path,
+      )
   try:
     tokenizer_path = tokenizer.save_pretrained(work_dir, legacy_format=False)
     # TODO(weiyiw): This is rough... polish it.
