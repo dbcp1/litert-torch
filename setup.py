@@ -90,7 +90,7 @@ setup(
         "kagglehub",
         "tabulate",
         "torch>=2.4.0",
-        "ai-edge-litert-nightly==2.2.0.dev20260316",  # with converter
+        "ai-edge-litert-nightly",  # with converter
         "ai-edge-quantizer-nightly",
         "torchao",
         "jax",
