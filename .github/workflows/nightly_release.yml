@@ -82,7 +82,7 @@ jobs:
 
       - name: Install litert-torch-nightly
         run: |
-          python -m pip install litert-torch-nightly
+          python -m pip install --pre litert-torch-nightly
 
       - name: Import litert-torch
         run: |

@@ -28,8 +28,8 @@ from litert_torch.backend import export_utils
 from litert_torch.backend import inline_consts as inline_consts_lib
 from litert_torch.backend import lowerings
 from litert_torch.backend.experimental import torch_tfl
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import func
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import func
 import torch
 import torch.utils._pytree as pytree
 

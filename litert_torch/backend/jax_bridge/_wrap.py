@@ -24,10 +24,10 @@ import jax
 from litert_torch.backend import export_utils
 from litert_torch.backend.jax_bridge import utils
 from litert_torch.backend.lowerings import context as lowerings_context
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir import passmanager
-from ai_edge_litert.mlir.dialects import func
-from ai_edge_litert.mlir.dialects import stablehlo
+from litert_converter.mlir import ir
+from litert_converter.mlir import passmanager
+from litert_converter.mlir.dialects import func
+from litert_converter.mlir.dialects import stablehlo
 from jax._src.lib.mlir.dialects import hlo as jax_stablehlo  # pylint: disable=reimported
 import torch.utils._pytree as pytree
 

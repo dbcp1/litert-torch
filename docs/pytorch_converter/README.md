@@ -338,7 +338,7 @@ issues, you can optionally switch to the legacy Torch XLA backend:
 
 ```bash
 # Install litert-torch with torch-xla dependency
-pip install litert-torch-nightly[torch-xla]
+pip install --pre litert-torch-nightly[torch-xla]
 
 # Enable torch-xla as the LiteRT Torch backend
 export USE_TORCH_XLA=1

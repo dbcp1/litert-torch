@@ -16,8 +16,8 @@
 from dataclasses import dataclass
 from typing import Sequence
 from litert_torch.backend import lowerings
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import stablehlo
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import stablehlo
 import torch
 
 

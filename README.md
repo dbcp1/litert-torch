@@ -92,7 +92,7 @@ pip install litert-torch
 
 Alternately, the nightly version can be installed with:
 ```bash
-pip install litert-torch-nightly
+pip install --pre litert-torch-nightly
 ```
 
 

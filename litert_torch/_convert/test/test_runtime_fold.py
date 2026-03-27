@@ -16,11 +16,11 @@
 
 from litert_torch._convert import runtime_fold as runtime_fold_lib
 from absl.testing import absltest as googletest
-from ai_edge_litert.tools.model_utils import model_builder
-from ai_edge_litert.tools.model_utils import testing
-from ai_edge_litert.tools.model_utils import transform as mu_transform
-from ai_edge_litert.tools.model_utils.dialect import mlir
-from ai_edge_litert.tools.model_utils.dialect import tfl
+from litert_converter.tools.model_utils import model_builder
+from litert_converter.tools.model_utils import testing
+from litert_converter.tools.model_utils import transform as mu_transform
+from litert_converter.tools.model_utils.dialect import mlir
+from litert_converter.tools.model_utils.dialect import tfl
 
 
 runtime_fold = runtime_fold_lib.runtime_fold

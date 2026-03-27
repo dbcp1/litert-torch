@@ -23,11 +23,11 @@ LazyModelExporter = litert_converter.LazyModelExporter
 
 try:
   # pylint: disable=g-import-not-at-top
-  from ai_edge_litert.tools import model_utils as mu
-  from ai_edge_litert.tools.model_utils import core
-  from ai_edge_litert.tools.model_utils import match as mm
-  from ai_edge_litert.tools.model_utils.dialect import mlir
-  from ai_edge_litert.tools.model_utils.dialect import tfl
+  from litert_converter.tools import model_utils as mu
+  from litert_converter.tools.model_utils import core
+  from litert_converter.tools.model_utils import match as mm
+  from litert_converter.tools.model_utils.dialect import mlir
+  from litert_converter.tools.model_utils.dialect import tfl
   # pylint: enable=g-import-not-at-top
 
   _is_mu_available = True

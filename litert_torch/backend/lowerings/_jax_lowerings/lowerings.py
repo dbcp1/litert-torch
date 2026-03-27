@@ -23,7 +23,7 @@ from litert_torch.backend import jax_bridge
 from litert_torch.backend.lowerings import context
 from litert_torch.backend.lowerings import registry
 from litert_torch.backend.lowerings._jax_lowerings import torchax_ops
-from ai_edge_litert.mlir import ir
+from litert_converter.mlir import ir
 import numpy as np
 import torch
 

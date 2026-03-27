@@ -19,8 +19,8 @@ import functools
 import numbers
 from typing import Any, Optional, Sequence, Union
 from litert_torch.backend import export_utils
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import stablehlo
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import stablehlo
 import numpy as np
 import torch
 import torch.utils._pytree as pytree

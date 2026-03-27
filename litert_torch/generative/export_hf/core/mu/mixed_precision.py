@@ -19,11 +19,11 @@ import pathlib
 
 from xdsl import irdl
 
-from ai_edge_litert.tools import model_utils as mu
-from ai_edge_litert.tools.model_utils.dialect import func
-from ai_edge_litert.tools.model_utils.dialect import mlir
-from ai_edge_litert.tools.model_utils.dialect import stablehlo
-from ai_edge_litert.tools.model_utils.dialect import tfl
+from litert_converter.tools import model_utils as mu
+from litert_converter.tools.model_utils.dialect import func
+from litert_converter.tools.model_utils.dialect import mlir
+from litert_converter.tools.model_utils.dialect import stablehlo
+from litert_converter.tools.model_utils.dialect import tfl
 
 
 def default_fp32_predicate(op):

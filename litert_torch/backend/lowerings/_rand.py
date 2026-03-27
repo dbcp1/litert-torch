@@ -17,9 +17,9 @@ import uuid
 from litert_torch.backend import export_utils
 from litert_torch.backend.lowerings import context
 from litert_torch.backend.lowerings import registry
-from ai_edge_litert.mlir import ir
-from ai_edge_litert.mlir.dialects import func
-from ai_edge_litert.mlir.dialects import stablehlo
+from litert_converter.mlir import ir
+from litert_converter.mlir.dialects import func
+from litert_converter.mlir.dialects import stablehlo
 import numpy as np
 import torch
 import torch.utils._pytree as pytree

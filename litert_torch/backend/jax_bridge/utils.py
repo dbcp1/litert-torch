@@ -17,7 +17,7 @@
 import jax
 import jax.numpy as jnp
 from litert_torch import backend
-from ai_edge_litert.mlir import ir
+from litert_converter.mlir import ir
 import torch
 
 

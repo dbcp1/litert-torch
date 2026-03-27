@@ -17,7 +17,7 @@
 import abc
 import dataclasses
 from typing import TypeVar
-from ai_edge_litert.mlir import ir
+from litert_converter.mlir import ir
 import torch
 
 
