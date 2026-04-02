@@ -15,6 +15,7 @@
 """Base class for cache."""
 
 import abc
+from typing import Any, Dict
 from litert_torch.generative.export_hf.core import exportable_module_config
 from transformers import cache_utils
 
@@ -39,6 +40,14 @@ class LiteRTLMCacheLayerMixin(cache_utils.CacheLayerMixin, abc.ABC):
     """Returns the index of the sequence dimension in V cache."""
     ...
 
+  def set_cache_runtime_args(self, cache_runtime_args: Dict[str, Any]) -> None:
+    """Sets the cache runtime arguments."""
+    setattr(self, "cache_runtime_args", cache_runtime_args)
+
+  def get_cache_runtime_args(self) -> Dict[str, Any]:
+    """Returns the cache runtime arguments."""
+    return getattr(self, "cache_runtime_args", {})
+
   @classmethod
   @abc.abstractmethod
   def create_from_config(
@@ -61,6 +70,12 @@ class LiteRTLMCacheMixin(cache_utils.Cache, abc.ABC):
   ) -> "LiteRTLMCacheMixin":
     """Creates a KV cache from the model config."""
     ...
+
+  def set_cache_runtime_args(self, cache_runtime_args: Dict[str, Any]) -> None:
+    """Sets the cache runtime arguments."""
+    for layer in self.layers:
+      assert isinstance(layer, LiteRTLMCacheLayerMixin)
+      layer.set_cache_runtime_args(cache_runtime_args)
 
 
 CACHE_REGISTRY: dict[str, type[LiteRTLMCacheMixin]] = {}

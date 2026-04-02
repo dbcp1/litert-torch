@@ -49,10 +49,10 @@ def build_cache_data(
   return cache_data
 
 
-def update_cache(slices, kv_cache, cache_kwargs):
+def update_cache(slices, kv_cache):
   """Updates the cache with the given slices."""
   for i in range(len(slices)):
-    kv_cache.update(slices[i][0], slices[i][1], i, cache_kwargs)
+    kv_cache.update(slices[i][0], slices[i][1], i)
   return kv_cache
 
 
@@ -139,6 +139,7 @@ class CacheTest(googletest.TestCase):
     cache_kwargs = {
         "cache_position": torch.tensor([time_step], dtype=torch.int32)
     }
+    kv_cache.set_cache_runtime_args(cache_kwargs)
     k_slice = torch.zeros(batch_size, kv_head_size, input_seq, head_dim)
     v_slice = torch.zeros(batch_size, kv_head_size, input_seq, head_dim)
     slices = [(k_slice, v_slice)] * num_layers
@@ -150,7 +151,7 @@ class CacheTest(googletest.TestCase):
     )
     expected_slices = [(expected_k_slice, expected_v_slice)] * num_layers
 
-    kv_cache = update_cache(slices, kv_cache, cache_kwargs)
+    kv_cache = update_cache(slices, kv_cache)
 
     self.assert_cache_slice_equals(
         expected_slices, kv_cache, num_layers, time_step, input_seq

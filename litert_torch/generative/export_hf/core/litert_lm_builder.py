@@ -113,7 +113,7 @@ def build_llm_metadata(
 
   llm_metadata = llm_metadata_pb2.LlmMetadata()
 
-  if getattr(tokenizer, 'add_bos_token', True):
+  if hasattr(tokenizer, 'bos_token') and tokenizer.bos_token:
     if isinstance(tokenizer.bos_token, int):
       llm_metadata.start_token.token_ids.ids.append(tokenizer.bos_token)
     elif isinstance(tokenizer.bos_token, str):

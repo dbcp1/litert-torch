@@ -24,7 +24,7 @@ Shape annotations used here:
   H: head dimension
 """
 
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple, Dict
 
 import jaxtyping as jt
 import litert_torch.generative.custom_ops.dynamic_update_slice as tfl_dus
@@ -163,10 +163,10 @@ class LiteRTLMCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
       self,
       key_states: torch.Tensor,
       value_states: torch.Tensor,
-      cache_kwargs: Optional[dict[str, Any]] = None,
+      *args,
+      **kwargs,
   ) -> tuple[torch.Tensor, torch.Tensor]:
-    if cache_kwargs is None:
-      cache_kwargs = {}
+    cache_kwargs = self.get_cache_runtime_args()
     seq_len = key_states.shape[2]
     self.cumulative_length += seq_len
 

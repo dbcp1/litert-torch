@@ -63,6 +63,9 @@ class LiteRTSplitCacheExportableModuleForDecoderOnlyLM(
     ret = {}
     ret['inputs_embeds'] = embeddings
 
+    cache_runtime_args = {'cache_position': torch.arange(embeddings.shape[1])}
+    kv_cache.set_cache_runtime_args(cache_runtime_args)
+
     ret.update({
         'position_ids': torch.arange(embeddings.shape[1])[None, :],
         'past_key_values': kv_cache,
@@ -317,11 +320,12 @@ class CacheUpdate(torch.nn.Module):
     num_layers = len(kv_slice.layers)
 
     cache_kwargs = {'cache_position': input_pos, 'kv_slice_preprocessed': True}
+    kv_cache.set_cache_runtime_args(cache_kwargs)
 
     for i in range(num_layers):
       k_slice = kv_slice.layers[i].keys
       v_slice = kv_slice.layers[i].values
-      kv_cache.update(k_slice, v_slice, i, cache_kwargs)
+      kv_cache.update(k_slice, v_slice, i)
 
     return {'kv_cache': kv_cache}
 

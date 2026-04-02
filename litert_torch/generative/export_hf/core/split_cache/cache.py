@@ -24,7 +24,7 @@ Shape annotations used here:
   H: head dimension
 """
 
-from typing import Any, List, Optional, Self, Tuple
+from typing import List, Self, Tuple
 import jaxtyping as jt
 from litert_torch.generative.export_hf.core import exportable_module_config
 import litert_torch.generative.export_hf.core.cache_base as cache_base_lib
@@ -110,7 +110,8 @@ class LiteRTLMSplitCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
       self,
       key_states: torch.Tensor,
       value_states: torch.Tensor,
-      cache_kwargs: Optional[dict[str, Any]] = None,
+      *args,
+      **kwargs,
   ) -> tuple[torch.Tensor, torch.Tensor]:
     seq_len = key_states.shape[2]
     self.cumulative_length += seq_len

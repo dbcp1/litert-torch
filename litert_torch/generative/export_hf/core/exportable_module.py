@@ -97,6 +97,9 @@ class LiteRTExportableModuleForDecoderOnlyLM(ExportableModuleBase):
     else:
       ret["input_ids"] = tokens
 
+    cache_runtime_args = {"cache_position": input_pos}
+    kv_cache.set_cache_runtime_args(cache_runtime_args)
+
     ret.update({
         "position_ids": input_pos.clone().unsqueeze(0),
         "past_key_values": kv_cache,
