@@ -26,6 +26,9 @@ def get_metadata_builder(
     return gemma3_metadata_builder.build_llm_metadata
   elif model_config.model_type == 'gemma3n':
     return gemma3_metadata_builder.build_llm_metadata
+  elif model_config.model_type == 'gemma4':
+    # TODO(weiyiw): Update Gemma4 metadata builder once builder is updated.
+    return gemma3_metadata_builder.build_llm_metadata
   else:
     return (
         lambda source_model_artifacts, export_config, exported_model_artifacts, llm_metadata: llm_metadata

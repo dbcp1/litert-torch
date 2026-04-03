@@ -18,6 +18,7 @@ from litert_torch.generative.export_hf.core import exportable_module
 from litert_torch.generative.export_hf.model_ext.gemma3 import vision_exportable as gemma3_vision_exportable
 from litert_torch.generative.export_hf.model_ext.gemma3n import exportable_module as gemma3n_exportable
 from litert_torch.generative.export_hf.model_ext.gemma3n import vision_exportable as gemma3n_vision_exportable
+from litert_torch.generative.export_hf.model_ext.gemma4 import exportable_module as gemma4_exportable
 import transformers
 
 
@@ -37,6 +38,18 @@ def get_prefill_decode_exportables(
     return (
         gemma3n_exportable.LiteRTExportableModuleForDecoderOnlyLMPrefillExternalEmbedder,
         gemma3n_exportable.LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder,
+    )
+  elif model_config.model_type == 'gemma4':
+    assert (
+        not export_config.split_cache
+    ), 'Split cache is not supported for Gemma4.'
+    assert (
+        export_config.externalize_embedder
+    ), 'External embedder is required for Gemma4.'
+    print('Using Gemma4 exportables.')
+    return (
+        gemma4_exportable.LiteRTExportableModuleForDecoderOnlyLMPrefillExternalEmbedder,
+        gemma4_exportable.LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder,
     )
   else:
     pass
@@ -69,6 +82,14 @@ def get_additional_exportables(
     return {
         'per_layer_embedder': (
             gemma3n_exportable.LiteRTExportableModuleForPerLayerEmbedder
+        ),
+    }
+  elif model_config.model_type == 'gemma4':
+    if not model_config.text_config.hidden_size_per_layer_input:
+      return {}
+    return {
+        'per_layer_embedder': (
+            gemma4_exportable.LiteRTExportableModuleForPerLayerEmbedder
         ),
     }
   else:

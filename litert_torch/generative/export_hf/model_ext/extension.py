@@ -32,5 +32,11 @@ def update_export_config(
       return dataclasses.replace(
           export_config, cache_implementation='LiteRTLFM2Cache'
       )
+    case 'gemma4':
+      if export_config.split_cache:
+        raise ValueError('Split cache is not supported for Gemma4.')
+      return dataclasses.replace(
+          export_config, cache_implementation='LiteRTCacheForGemma4'
+      )
     case _:
       return export_config
