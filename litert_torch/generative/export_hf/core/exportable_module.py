@@ -66,11 +66,15 @@ class LiteRTExportableModuleForDecoderOnlyLM(ExportableModuleBase):
       kv_cache,
       mask,
   ):
-    sliding_window = getattr(self.model.config, "sliding_window", None)
+    if hasattr(self.model.config, "text_config"):
+      text_config = self.model.config.text_config
+    else:
+      text_config = self.model.config
+    sliding_window = getattr(text_config, "sliding_window", None)
     # TODO(weiyiw): This is a hack to check if it's Mistral.
     is_mistral = getattr(self.model.config, "model_type", "") == "mistral"
     if sliding_window is not None:
-      layer_types = getattr(self.model.config, "layer_types", None)
+      layer_types = getattr(text_config, "layer_types", None)
       masks = {
           "full_attention": mask,
       }
@@ -82,7 +86,7 @@ class LiteRTExportableModuleForDecoderOnlyLM(ExportableModuleBase):
             utils.create_sliding_mask(
                 input_pos.clone().unsqueeze(0),
                 kv_cache.get_max_cache_shape(),
-                self.model.config.sliding_window,
+                sliding_window,
             )
             + mask
         )
