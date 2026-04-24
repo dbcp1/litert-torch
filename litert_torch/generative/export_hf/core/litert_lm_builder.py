@@ -226,7 +226,25 @@ def package_model(
   litert_lm_model_type_override = export_config.litert_lm_model_type_override
   tokenizer = source_model_artifacts.tokenizer
   tokenizer_model_path = exported_model_artifacts.tokenizer_model_path
-  if use_jinja_template:
+  if export_config.jinja_chat_template_override:
+    if os.path.exists(export_config.jinja_chat_template_override):
+      chat_templates_path = export_config.jinja_chat_template_override
+    else:
+      try:
+        # pylint: disable=g-import-not-at-top
+        import huggingface_hub
+      except ImportError as e:
+        raise ImportError(
+            'Please install huggingface_hub to use remote chat template.'
+        ) from e
+      repo_id = export_config.jinja_chat_template_override
+      filename = 'chat_template.jinja'
+      chat_templates_path = huggingface_hub.hf_hub_download(
+          repo_id=repo_id, filename=filename
+      )
+    with open(chat_templates_path, 'rt') as f:
+      chat_templates = f.read()
+  elif use_jinja_template:
     chat_templates = getattr(tokenizer, 'chat_template', '')
   else:
     chat_templates = parse_chat_template(tokenizer)
