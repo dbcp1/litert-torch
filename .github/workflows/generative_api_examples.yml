@@ -18,7 +18,9 @@ on:
 jobs:
   check-examples:
     runs-on:
-      labels: Linux_runner_8_core
+      labels: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
 
     steps:
       - uses: actions/setup-python@v4

@@ -26,7 +26,7 @@ jobs:
       - name: Set matrix
         id: set-matrix
         run: |
-          os=("Linux_runner_8_core")
+          os=("linux-x86-n2-16")
           if [[ "${{ inputs.run-on-macos }}" == "true" ]]; then
             os+=("macos-latest")
           fi
@@ -40,6 +40,7 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
         os: ${{ fromJson(needs.prepare-matrix.outputs.os) }}
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.os == 'linux-x86-n2-16' && 'us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest' || null }}
     steps:
       - uses: actions/checkout@v3
         with:
