@@ -22,10 +22,10 @@ from litert_torch.generative.export_hf.core import export_lib
 from litert_torch.generative.export_hf.core import exportable_module
 from litert_torch.generative.export_hf.model_ext import metadata_builder as metadata_builder_lib
 
-from ai_edge_litert.internal import litertlm_builder
-from ai_edge_litert.internal import llm_metadata_pb2
-from ai_edge_litert.internal import llm_model_type_pb2
-from ai_edge_litert.internal import sampler_params_pb2
+import litert_lm_builder as litertlm_builder
+from litert_lm_builder.runtime.proto import llm_metadata_pb2
+from litert_lm_builder.runtime.proto import llm_model_type_pb2
+from litert_lm_builder.runtime.proto import sampler_params_pb2
 
 _PH = 'KIMAIRA'
 

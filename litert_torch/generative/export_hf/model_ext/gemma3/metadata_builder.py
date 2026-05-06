@@ -17,8 +17,8 @@
 from litert_torch.generative.export_hf.core import export_lib
 from litert_torch.generative.export_hf.core import exportable_module
 
-from ai_edge_litert.internal import llm_metadata_pb2
-from ai_edge_litert.internal import llm_model_type_pb2
+from litert_lm_builder.runtime.proto import llm_metadata_pb2
+from litert_lm_builder.runtime.proto import llm_model_type_pb2
 
 
 def build_llm_metadata(

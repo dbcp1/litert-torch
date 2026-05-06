@@ -250,7 +250,9 @@ class SplitAttentionMaskBuilder(nn.Module):
     if sliding_window_sizes is None:
       sliding_window_sizes = [None]
     local_masks = {}
-    self.global_mask = None
+    self.global_mask = attention_mask.SplitAttentionMask(
+        context_size, None, pad_token
+    )
     for sliding_window_size in sliding_window_sizes:
       if sliding_window_size is not None:
         local_masks[sliding_window_size] = attention_mask.SplitAttentionMask(
@@ -323,6 +325,9 @@ class CacheUpdate(torch.nn.Module):
     kv_cache.set_cache_runtime_args(cache_kwargs)
 
     for i in range(num_layers):
+      # TODO(weiyiw): Fix for linear attention layers.
+      assert hasattr(kv_slice.layers[i], 'keys')
+      assert hasattr(kv_slice.layers[i], 'values')
       k_slice = kv_slice.layers[i].keys
       v_slice = kv_slice.layers[i].values
       kv_cache.update(k_slice, v_slice, i)
