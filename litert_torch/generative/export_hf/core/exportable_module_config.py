@@ -56,7 +56,10 @@ class ExportableModuleConfig:
   experimental_use_mixed_precision: bool = False
   export_vision_encoder: bool = True
   # TODO(weiyiw): Update when b/481323182 is fixed.
-  vision_encoder_quantization_recipe: str | None = "weight_only_wi8_afp32"
+  # For now, for vision encoder, if there's conv op, set weight_only_wi8_afp32
+  # if you intend to run on CPU, and set dynamic_wi8_afp32 if you intend to run
+  # on GPU.
+  vision_encoder_quantization_recipe: str | None = "dynamic_wi8_afp32"
   litert_lm_model_type_override: str | None = None
   litert_lm_llm_metadata_override: str | None = None
   jinja_chat_template_override: str | None = None

@@ -462,7 +462,9 @@ def export_vision_encoder_models(
   adapter_module = adapter_module_cls(model, export_config, tokenizer)
   converter = converter_utils.Converter()
   sample_inputs = encode_module.get_sample_inputs(
-      model_config, image_processor=image_processor
+      model_config,
+      image_processor=image_processor,
+      **export_config.extra_kwargs,
   )
   for signature_name, (sample_inputs, _) in sample_inputs.items():
     converter.add_signature(
@@ -482,7 +484,9 @@ def export_vision_encoder_models(
 
   converter = converter_utils.Converter()
   sample_inputs = adapter_module.get_sample_inputs(
-      model_config, image_processor=image_processor
+      model_config,
+      image_processor=image_processor,
+      **export_config.extra_kwargs,
   )
   for signature_name, (sample_inputs, _) in sample_inputs.items():
     converter.add_signature(
