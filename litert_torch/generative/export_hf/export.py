@@ -19,6 +19,7 @@ import gc
 import os
 import shutil
 import tempfile
+from typing import Any
 import warnings
 from litert_torch import progress
 from litert_torch.generative.export_hf.core import export_lib
@@ -99,6 +100,9 @@ def export(
     vision_encoder_quantization_recipe: str | None = None,
     litert_lm_model_type_override: str | None = None,
     litert_lm_llm_metadata_override: str | None = None,
+    aot_backend: str | None = None,
+    aot_soc_model: str | None = None,
+    aot_compilation_config_dict: dict[str, Any] | None = None,
     experimental_lightweight_conversion: bool = False,
     # pylint: enable=unused-argument
     **kwargs,
@@ -174,6 +178,8 @@ def export(
   # TODO(weiyiw): Move this to the exportable module config.
   export_tasks = []
   export_tasks.append(export_lib.export_text_prefill_decode_model)
+  if export_config.aot_backend is not None:
+    export_tasks.append(export_lib.aot_compile_model)
   if export_config.externalize_embedder:
     export_tasks.append(export_lib.export_embedder_model)
   if export_config.split_cache:

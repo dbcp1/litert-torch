@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Metadata builder for Gemma3."""
+"""Metadata builder for Gemma4."""
 
 from litert_torch.generative.export_hf.core import export_lib
 from litert_torch.generative.export_hf.core import exportable_module
@@ -32,25 +32,27 @@ def build_llm_metadata(
     return llm_metadata
   if not export_config.export_vision_encoder:
     return llm_metadata
-  tokenizer = source_model_artifacts.tokenizer
-  image_processor = source_model_artifacts.image_processor
+  llm_metadata.llm_model_type.CopyFrom(
+      llm_model_type_pb2.LlmModelType(gemma4=llm_model_type_pb2.Gemma4())
+  )
   if exported_model_artifacts.vision_encoder_model_path:
-    if not hasattr(tokenizer, 'special_tokens_map'):
-      raise ValueError('Tokenizer does not have special_tokens_map.')
-    token_map = tokenizer.special_tokens_map
-    boi_token = token_map.get('boi_token', '')
-    eoi_token = token_map.get('eoi_token', '')
-    llm_metadata.llm_model_type.CopyFrom(
-        llm_model_type_pb2.LlmModelType(gemma3n=llm_model_type_pb2.Gemma3N())
-    )
-    llm_metadata.llm_model_type.gemma3n.start_of_image_token.token_str = (
-        boi_token
-    )
-    llm_metadata.llm_model_type.gemma3n.end_of_image_token.token_str = eoi_token
-    llm_metadata.llm_model_type.gemma3n.image_tensor_height = (
-        image_processor.size['height']
-    )
-    llm_metadata.llm_model_type.gemma3n.image_tensor_width = (
-        image_processor.size['width']
-    )
+    # TODO(weiyiw): Add support for Gemma4 metadata builder for vision.
+    pass
+    # image_processor = source_model_artifacts.image_processor
+    # tokenizer = source_model_artifacts.tokenizer
+    # if not hasattr(tokenizer, 'special_tokens_map'):
+    #   raise ValueError('Tokenizer does not have special_tokens_map.')
+    # token_map = tokenizer.special_tokens_map
+    # boi_token = token_map.get('boi_token', '')
+    # eoi_token = token_map.get('eoi_token', '')
+    # llm_metadata.llm_model_type.gemma4.start_of_image_token.token_str = (
+    #     boi_token
+    # )
+    # llm_metadata.llm_model_type.gemma4.end_of_image_token.token_str = eoi_token
+    # llm_metadata.llm_model_type.gemma4.image_tensor_height = (
+    #     image_processor.size['height']
+    # )
+    # llm_metadata.llm_model_type.gemma4.image_tensor_width = (
+    #     image_processor.size['width']
+    # )
   return llm_metadata

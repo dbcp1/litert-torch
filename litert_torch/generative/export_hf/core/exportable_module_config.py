@@ -36,7 +36,7 @@ class ExportableModuleConfig:
   task: ExportTask | str = ExportTask.TEXT_GENERATION
   keep_temporary_files: bool = False
   trust_remote_code: bool = False
-  prefill_lengths: list[int] = dataclasses.field(default_factory=lambda: [256])
+  prefill_lengths: list[int] = dataclasses.field(default_factory=lambda: [128])
   cache_length: int = 4096
   # For quantization
   quantization_recipe: str | None = "dynamic_wi8_afp32"
@@ -62,6 +62,11 @@ class ExportableModuleConfig:
   jinja_chat_template_override: str | None = None
 
   experimental_lightweight_conversion: bool = False
+
+  # AOT Compilation.
+  aot_backend: str | None = None
+  aot_soc_model: str | None = None
+  aot_compilation_config_dict: dict[str, Any] | None = None
 
   extra_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
 

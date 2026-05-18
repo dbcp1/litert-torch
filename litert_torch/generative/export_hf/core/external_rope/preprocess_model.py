@@ -16,7 +16,6 @@
 
 from typing import Any
 
-from litert_torch.generative.export_hf.core import utils
 import torch
 
 
@@ -29,10 +28,12 @@ class RotaryPositionEmbeddingInjector(torch.nn.Module):
     super().__init__()
     self.config = config
 
-  def forward(self, x, position_ids):
+  def forward(self, x, position_ids, layer_type=None):
     del x, position_ids
 
     assert self.data is not None
+    if layer_type:
+      return self.data[layer_type]
     return self.data
 
 
@@ -44,10 +45,4 @@ def inject_rotary_position_embedding(model):
     )
   model.model.original_rotary_emb = model.model.rotary_emb
   model.model.rotary_emb = RotaryPositionEmbeddingInjector(model.model.config)
-
-  if utils.has_local_rope(model):
-    model.model.original_rotary_emb_local = model.model.rotary_emb_local
-    model.model.rotary_emb_local = RotaryPositionEmbeddingInjector(
-        model.model.config
-    )
   return model

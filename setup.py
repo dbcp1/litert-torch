@@ -93,12 +93,13 @@ setup(
         "ai-edge-litert-nightly[model-utils]",
         "ai-edge-quantizer-nightly",
         "litert-converter>=0.0.0.dev0",
-        "torchao",
+        "torchao>=0.17.0",
         "jax",
         "jaxtyping",
         "fire",
         "sentencepiece",
         "rich",
+        "litert-lm-builder>=0.0.0.dev0",
     ],
     entry_points={
         "console_scripts": [

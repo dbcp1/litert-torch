@@ -15,6 +15,7 @@
 """Exportable modules for extended modules."""
 
 from litert_torch.generative.export_hf.model_ext.gemma3 import metadata_builder as gemma3_metadata_builder
+from litert_torch.generative.export_hf.model_ext.gemma4 import metadata_builder as gemma4_metadata_builder
 import transformers
 
 
@@ -27,8 +28,7 @@ def get_metadata_builder(
   elif model_config.model_type == 'gemma3n':
     return gemma3_metadata_builder.build_llm_metadata
   elif model_config.model_type == 'gemma4':
-    # TODO(weiyiw): Update Gemma4 metadata builder once builder is updated.
-    return gemma3_metadata_builder.build_llm_metadata
+    return gemma4_metadata_builder.build_llm_metadata
   else:
     return (
         lambda source_model_artifacts, export_config, exported_model_artifacts, llm_metadata: llm_metadata

@@ -15,6 +15,7 @@
 """Exportable module for externalized rotary embedding."""
 
 from litert_torch.generative.export_hf.core import exportable_module as base_exportable_module
+from litert_torch.generative.export_hf.core import utils
 import torch
 
 
@@ -27,10 +28,7 @@ class RoPEEmbedder(torch.nn.Module):
 
     assert self.model.model.original_rotary_emb is not None
     self.rotary_emb = self.model.model.original_rotary_emb
-    if hasattr(self.model.model, 'original_rotary_emb_local'):
-      self.rotary_emb_local = self.model.model.original_rotary_emb_local
-    else:
-      self.rotary_emb_local = None
+    self.has_local_rope = utils.has_local_rope(model)
 
   def forward(
       self,
@@ -38,17 +36,24 @@ class RoPEEmbedder(torch.nn.Module):
   ):
     dummy = torch.ones((1, 1, 1), dtype=torch.float32)
     position_ids = input_pos.unsqueeze(0)
-    pos_emb = self.rotary_emb(dummy, position_ids)
-    ret = {
-        'pos_emb_cos': pos_emb[0],
-        'pos_emb_sin': pos_emb[1],
-    }
-    if self.rotary_emb_local is not None:
-      pos_emb_local = self.rotary_emb_local(dummy, position_ids)
+
+    if self.has_local_rope:
+      pos_emb = self.rotary_emb(dummy, position_ids, 'full_attention')
+      ret = {
+          'pos_emb_cos': pos_emb[0],
+          'pos_emb_sin': pos_emb[1],
+      }
+      pos_emb_local = self.rotary_emb(dummy, position_ids, 'sliding_attention')
       ret.update({
           'pos_emb_local_cos': pos_emb_local[0],
           'pos_emb_local_sin': pos_emb_local[1],
       })
+    else:
+      pos_emb = self.rotary_emb(dummy, position_ids)
+      ret = {
+          'pos_emb_cos': pos_emb[0],
+          'pos_emb_sin': pos_emb[1],
+      }
     return ret
 
   @classmethod

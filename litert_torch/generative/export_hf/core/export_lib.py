@@ -44,6 +44,9 @@ from litert_torch.generative.tools import tokenizer_to_sentencepiece_lib as toke
 import torch
 import transformers
 
+from ai_edge_litert.aot import aot_compile
+from ai_edge_litert.aot.core import aot_types
+from ai_edge_litert.aot.vendors import import_vendor
 from ai_edge_quantizer import quantizer as quantizer_lib
 from ai_edge_quantizer import recipe as recipe_lib
 
@@ -630,7 +633,7 @@ def export_tokenizer(
   """Exports tokenizer."""
   tokenizer = source_model_artifacts.tokenizer
   work_dir = export_config.work_dir
-  if hasattr(tokenizer, 'vocab_file'):
+  if hasattr(tokenizer, 'vocab_file') and tokenizer.vocab_file:
     tokenizer_path = tokenizer.vocab_file
     if tokenizer_path.endswith('tokenizer.model'):
       with open(tokenizer_path, 'rb') as f:
@@ -664,4 +667,48 @@ def export_tokenizer(
   return dataclasses.replace(
       exported_model_artifacts,
       tokenizer_model_path=tokenizer_path,
+  )
+
+
+@progress.task('AOT Compilation')
+def aot_compile_model(
+    source_model_artifacts: SourceModelArtifacts,
+    export_config: exportable_module.ExportableModuleConfig,
+    exported_model_artifacts: ExportedModelArtifacts,
+):
+  """AOT compiles the model."""
+  del source_model_artifacts  # Unused.
+  assert export_config.aot_backend is not None
+  assert export_config.aot_soc_model is not None
+  config = {
+      'backend_id': export_config.aot_backend,
+      'soc_model': export_config.aot_soc_model,
+  }
+  if export_config.aot_compilation_config_dict is not None:
+    config['compilation_config'] = export_config.aot_compilation_config_dict
+
+  backend_class = import_vendor.import_vendor(export_config.aot_backend)
+  backend = backend_class.create(config)
+
+  target = backend.target
+  source_model = exported_model_artifacts.prefill_decode_model_path
+  assert source_model is not None, 'Prefill-decode model is not found.'
+  output_dir = export_config.work_dir
+  output_path = source_model.removesuffix('.tflite') + '_aot_compiled.tflite'
+  config_dict = export_config.aot_compilation_config_dict or {}
+  aot_config = aot_types.CompilationConfig(
+      target=target,
+      **config_dict,
+  )
+  aot_results = aot_compile.aot_compile(
+      source_model,
+      output_dir=output_dir,
+      config=aot_config,
+  )
+  assert aot_results.models, 'AOT compilation failed.'
+  assert len(aot_results.models) == 1, 'Currently only support one target.'
+  aot_results.models[0].save(output_path, export_only=True)
+  return dataclasses.replace(
+      exported_model_artifacts,
+      prefill_decode_model_path=output_path,
   )

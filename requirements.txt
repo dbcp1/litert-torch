@@ -2,7 +2,7 @@ absl-py
 torch==2.11.0
 torchvision==0.26.0
 torchaudio==2.11.0
-torchao
+torchao>=0.17.0
 --pre
 ai-edge-litert-nightly[model-utils]
 ai-edge-quantizer-nightly

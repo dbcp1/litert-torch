@@ -78,9 +78,10 @@ ERROR_MESSAGE = r"""
 
 
 def has_local_rope(model):
-  if hasattr(model, 'language_model'):
-    model = model.language_model
-  return hasattr(model.model, 'rotary_emb_local')
+  config = model.config
+  if hasattr(config, 'text_config'):
+    config = config.text_config
+  return 'sliding_attention' in config.rope_parameters
 
 
 def has_sliding_attention(model):

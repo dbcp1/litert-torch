@@ -15,16 +15,15 @@
 
 """Utilities for building LiteRT-LM files."""
 
-
 import os
 import pathlib
 from google.protobuf import text_format
 
 try:
   # pylint: disable=g-import-not-at-top
-  from ai_edge_litert.internal import llm_metadata_pb2
-  from ai_edge_litert.internal import litertlm_builder
-  from ai_edge_litert.internal import llm_model_type_pb2
+  import litert_lm_builder as litertlm_builder
+  from litert_lm_builder.runtime.proto import llm_metadata_pb2
+  from litert_lm_builder.runtime.proto import llm_model_type_pb2
   # pylint: enable=g-import-not-at-top
 
   _litertlm_builder_available = True
@@ -117,27 +116,27 @@ def build_litertlm(
   mdl_type = llm_metadata.llm_model_type.WhichOneof('model_type')
   if not mdl_type or mdl_type == 'generic_model':
     match llm_model_type:
-      case litertlm_builder.LlmModelType.GENERIC:
+      case 'generic':
         llm_metadata.llm_model_type.CopyFrom(
             llm_model_type_pb2.LlmModelType(
                 generic_model=llm_model_type_pb2.GenericModel()
             )
         )
-      case litertlm_builder.LlmModelType.GEMMA3N:
+      case 'gemma3n':
         llm_metadata.llm_model_type.CopyFrom(
             llm_model_type_pb2.LlmModelType(
                 gemma3n=llm_model_type_pb2.Gemma3N()
             )
         )
-      case litertlm_builder.LlmModelType.GEMMA3:
+      case 'gemma3':
         llm_metadata.llm_model_type.CopyFrom(
             llm_model_type_pb2.LlmModelType(gemma3=llm_model_type_pb2.Gemma3())
         )
-      case litertlm_builder.LlmModelType.QWEN3:
+      case 'qwen3':
         llm_metadata.llm_model_type.CopyFrom(
             llm_model_type_pb2.LlmModelType(qwen3=llm_model_type_pb2.Qwen3())
         )
-      case litertlm_builder.LlmModelType.QWEN2P5:
+      case 'qwen2p5':
         llm_metadata.llm_model_type.CopyFrom(
             llm_model_type_pb2.LlmModelType(
                 qwen2p5=llm_model_type_pb2.Qwen2p5()
