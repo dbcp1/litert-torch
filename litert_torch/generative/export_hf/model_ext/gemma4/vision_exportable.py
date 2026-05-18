@@ -59,7 +59,9 @@ class LiteRTExportableModuleForGemma4VisionEncoder(
     )
 
     if vision_tower.config.standardize:
-      hidden_states = (hidden_states - self.std_bias) * self.std_scale
+      hidden_states = (
+          hidden_states - vision_tower.std_bias
+      ) * vision_tower.std_scale
 
     return {'features': hidden_states, 'mask': pooler_mask}
 
