@@ -28,7 +28,7 @@ class LiteRTExportableModuleForGemma3nVisionEncoder(
       images,
   ):
     images = images.permute((0, 3, 1, 2))  # to NCHW
-    vision_outputs = self.model.vision_tower(
+    vision_outputs = self.model.model.vision_tower(
         pixel_values=images
     ).last_hidden_state
     vision_outputs = vision_outputs.reshape(
@@ -74,7 +74,7 @@ class LiteRTExportableModuleForGemma3nVisionAdapter(
         return_tensors='pt',
     ).pixel_values
     with torch.device('meta'):
-      features = self.model.vision_tower(
+      features = self.model.model.vision_tower(
           pixel_values=dummy_image
       ).last_hidden_state
       features = features.reshape(

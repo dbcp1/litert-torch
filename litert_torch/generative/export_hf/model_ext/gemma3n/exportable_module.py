@@ -49,7 +49,7 @@ class LiteRTExportableModuleForDecoderOnlyLMPrefillExternalEmbedder(
         None, embeddings, per_layer_embeddings, input_pos, kv_cache, mask
     )
     inputs |= self.attention_kwargs()
-    output = self.model.language_model(**inputs)
+    output = self.model.model.language_model(**inputs)
     return {"kv_cache": output.past_key_values}
 
   def _get_input(
@@ -114,7 +114,7 @@ class LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder(
         None, embeddings, per_layer_embeddings, input_pos, kv_cache, mask
     )
     inputs |= self.attention_kwargs()
-    output = self.model.language_model(**inputs)
+    output = self.model.model.language_model(**inputs)
     hidden_states = output.last_hidden_state
     logits = self.model.lm_head(hidden_states)
     return {"kv_cache": output.past_key_values, "logits": logits}

@@ -31,8 +31,7 @@ class Gemma3nTextMLP(modeling_gemma3n.Gemma3nTextMLP):
   ):
     super().__init__(config, layer_idx)
     if self.activation_sparsity > 0.0:
-      normal_dist = torch.distributions.normal.Normal(0, 1)
-      std_multiplier = normal_dist.icdf(
+      std_multiplier = torch.special.ndtri(
           torch.tensor(self.activation_sparsity, dtype=torch.float32)
       )
       self.register_buffer("_std_multiplier", std_multiplier, persistent=False)

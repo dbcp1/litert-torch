@@ -34,7 +34,7 @@ class LiteRTExportableModuleForGemma3VisionEncoder(
     images = images.permute((0, 3, 1, 2))  # to NCHW
     return {
         'features': (
-            self.model.vision_tower(pixel_values=images).last_hidden_state
+            self.model.model.vision_tower(pixel_values=images).last_hidden_state
         )
     }
 
@@ -70,7 +70,7 @@ class LiteRTExportableModuleForGemma3VisionAdapter(
       self,
       soft_tokens,
   ):
-    image_features = self.model.multi_modal_projector(soft_tokens)
+    image_features = self.model.model.multi_modal_projector(soft_tokens)
     eoi = self.tokenizer.encode(
         self.tokenizer.special_tokens_map['eoi_token'], add_special_tokens=False
     )
@@ -94,7 +94,7 @@ class LiteRTExportableModuleForGemma3VisionAdapter(
         return_tensors='pt',
     ).pixel_values
     with torch.device('meta'):
-      features = self.model.vision_tower(
+      features = self.model.model.vision_tower(
           pixel_values=dummy_image
       ).last_hidden_state
     inputs = {'soft_tokens': torch.zeros_like(features, dtype=torch.float32)}
