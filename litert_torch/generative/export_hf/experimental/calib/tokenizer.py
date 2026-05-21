@@ -125,16 +125,24 @@ class Tokenizer:
     else:
       raise ValueError('No tokenizer available.')
 
-  def tokenize(self, input_string: str):
+  def tokenize(self, input_string: str, prepend_bos: bool = True):
     """Tokenizes the input string."""
     input_ids = self.tokenize_internal(input_string)
+    if prepend_bos:
+      bos_id = (
+          self.spm.bos_id()
+          if self.spm
+          else getattr(self.tx_tokenizer, 'bos_token_id', None)
+      )
+      if bos_id is not None:
+        input_ids = [bos_id] + np.array(input_ids).tolist()
     input_ids = np.array(
         np.array(input_ids).tolist(),
         dtype=np.int32,
     )
     return np.array(input_ids).astype(np.int32)
 
-  def process_request(self, request: Request):
+  def process_request(self, request: Request, prepend_bos: bool = True):
     """Processes the request."""
     ids_with_indices = []
     image_idx: set[int] = set()
@@ -151,7 +159,18 @@ class Tokenizer:
 
     ids_with_indices = sorted(ids_with_indices, key=lambda x: x[0])
 
-    ids = []
+    if prepend_bos:
+      bos_id = (
+          self.spm.bos_id()
+          if self.spm
+          else getattr(self.tx_tokenizer, 'bos_token_id', None)
+      )
+      if bos_id is not None:
+        ids = [bos_id]
+      else:
+        ids = []
+    else:
+      ids = []
 
     index_media = [-1]
     index_feat_in_media = [-1]
