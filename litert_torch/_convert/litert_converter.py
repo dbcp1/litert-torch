@@ -44,10 +44,8 @@ def _get_output_names(
       flat_names.append(f"output_{i}")
     return flat_names
 
-  flat_names = backend.export_utils.flat_dict_names(
-      spec.children_specs, spec.context
-  )
-  return flat_names
+  children = backend.export_utils.get_children(spec)
+  return backend.export_utils.flat_dict_names(children, spec.context)
 
 
 @dataclasses.dataclass

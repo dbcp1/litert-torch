@@ -679,6 +679,25 @@ class TestConvert(googletest.TestCase):
         fallback_backend.FallbackBackend.id(),
     )
 
+  def test_convert_model_with_dict_arg(self):
+    """Test converting a model taking a dictionary as positional argument."""
+
+    class DictModel(torch.nn.Module):
+
+      def forward(self, inputs: dict):
+        return inputs["x"] + inputs["y"]
+
+    args = ({"x": torch.randn(10, 10), "y": torch.randn(10, 10)},)
+    kwargs = {}
+    flat_inputs = {
+        "args_0_x": args[0]["x"].numpy(),
+        "args_0_y": args[0]["y"].numpy(),
+    }
+
+    self._compare_tflite_torch_args_kwargs(
+        DictModel(), args, kwargs, flat_inputs
+    )
+
 
 if __name__ == "__main__":
   googletest.main()

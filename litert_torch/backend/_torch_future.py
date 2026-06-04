@@ -36,11 +36,12 @@ def graph_module_flat_inputs(ep: torch.export.ExportedProgram, args, kwargs):
 
   flat_args = args
   if (in_spec := ep.call_spec.in_spec) is not None:
+    children = backend.export_utils.get_children(in_spec)
     if (
         in_spec.type == tuple
-        and len(in_spec.children_specs) == 2
-        and in_spec.children_specs[0].type == tuple
-        and in_spec.children_specs[1].type == dict
+        and len(children) == 2
+        and children[0].type == tuple
+        and children[1].type == dict
     ):
       # NOTE: this is the case where in_spec is for both args and kwargs
       flat_args = fx_pytree.tree_flatten_spec((args, kwargs), in_spec)

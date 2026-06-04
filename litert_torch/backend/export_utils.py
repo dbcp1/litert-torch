@@ -27,19 +27,29 @@ from litert_converter.mlir._mlir_libs import converter_api_ext
 IR_DYNAMIC = -9223372036854775808
 
 
-def flat_dict_names(
-    tree_spec: pytree.TreeSpec, context: pytree.Context
-) -> list[str]:
-  """Given a TreeSpec, this produces a list of names for the leaves.
+def get_children(spec: pytree.TreeSpec) -> list[pytree.TreeSpec]:
+  if hasattr(spec, "children"):
+    children = spec.children
+    if callable(children):
+      return children()
+    return children
+  return spec.children_specs
 
-  The list of names embeddeds the structure of the tree_spec. A nesting level is
+
+def flat_dict_names(
+    tree_specs: list[pytree.TreeSpec], context: pytree.Context
+) -> list[str]:
+  """Given a list of TreeSpecs, this produces a list of names for the leaves.
+
+  The list of names embeddeds the structure of the tree_specs. A nesting level
+  is
   indicated by an `_` and elements in a list are indicated by `_<index>`.
 
   TODO b/361601485: The flattening of names is not collision-free and needs to
   be revised.
 
   Args:
-    tree_spec: The TreeSpec to extract the names from.
+    tree_specs: The list of TreeSpecs to extract the names from.
     context: The context used to check if the provided spec belongs to a
       dictionary or a list.
 
@@ -58,20 +68,21 @@ def flat_dict_names(
 
   flat_names = []
   if context is None:
-    for i, spec in enumerate(tree_spec):
-      if spec.children_specs:
-        flat_names.extend([
-            f"{i}_{name}"
-            for name in flat_dict_names(spec.children_specs, spec.context)
-        ])
+    for i, spec in enumerate(tree_specs):
+      children = get_children(spec)
+      if children:
+        flat_names.extend(
+            f"{i}_{name}" for name in flat_dict_names(children, spec.context)
+        )
       else:
         flat_names.append(f"{i}")
   else:
     flat_ctx = _flatten_list(context)
-    for prefix, spec in zip(flat_ctx, tree_spec):
-      leaf_flat_names = flat_dict_names(spec.children_specs, spec.context)
+    for prefix, spec in zip(flat_ctx, tree_specs):
+      children = get_children(spec)
+      leaf_flat_names = flat_dict_names(children, spec.context)
       if leaf_flat_names:
-        flat_names.extend([f"{prefix}_{name}" for name in leaf_flat_names])
+        flat_names.extend(f"{prefix}_{name}" for name in leaf_flat_names)
       else:
         flat_names.append(prefix)
 
