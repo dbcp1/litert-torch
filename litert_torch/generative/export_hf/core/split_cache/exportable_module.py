@@ -75,8 +75,12 @@ class LiteRTSplitCacheExportableModuleForDecoderOnlyLM(
         'use_cache': True,
     })
 
-    assert self.model.model.original_rotary_emb is not None
-    self.model.model.rotary_emb.data = (
+    language_model = self.model.model
+    if hasattr(self.model.model, 'language_model'):
+      language_model = self.model.model.language_model
+
+    assert language_model.original_rotary_emb is not None
+    language_model.rotary_emb.data = (
         pos_emb_cos.permute(0, 2, 1, 3).squeeze(0),
         pos_emb_sin.permute(0, 2, 1, 3).squeeze(0),
     )
@@ -84,13 +88,13 @@ class LiteRTSplitCacheExportableModuleForDecoderOnlyLM(
       assert pos_emb_local_cos is not None
       assert pos_emb_local_sin is not None
       rope_data = {
-          'full_attention': self.model.model.rotary_emb.data,
+          'full_attention': language_model.rotary_emb.data,
           'sliding_attention': (
               pos_emb_local_cos.permute(0, 2, 1, 3).squeeze(0),
               pos_emb_local_sin.permute(0, 2, 1, 3).squeeze(0),
           ),
       }
-      self.model.model.rotary_emb.data = rope_data
+      language_model.rotary_emb.data = rope_data
 
     return ret
 
@@ -108,10 +112,18 @@ class LiteRTSplitCacheExportableModuleForDecoderOnlyLM(
   def _get_input(self, batch_size, input_length, cache_length):
 
     model_config = self.model.model.config
+    if hasattr(model_config, 'text_config'):
+      model_config = model_config.text_config
     embed_size_per_head = (
         getattr(model_config, 'head_dim', None)
         or model_config.hidden_size // model_config.num_attention_heads
     )
+    if hasattr(model_config, 'global_head_dim'):
+      global_embed_size_per_head = (
+          model_config.global_head_dim or embed_size_per_head
+      )
+    else:
+      global_embed_size_per_head = embed_size_per_head
 
     sample_inputs = {
         'embeddings': torch.ones(
@@ -121,10 +133,12 @@ class LiteRTSplitCacheExportableModuleForDecoderOnlyLM(
     }
     pos_emb = {
         'cos': torch.ones(
-            (1, input_length, 1, embed_size_per_head), dtype=torch.float32
+            (1, input_length, 1, global_embed_size_per_head),
+            dtype=torch.float32,
         ),
         'sin': torch.ones(
-            (1, input_length, 1, embed_size_per_head), dtype=torch.float32
+            (1, input_length, 1, global_embed_size_per_head),
+            dtype=torch.float32,
         ),
     }
     if utils.has_local_rope(self.model):
@@ -146,6 +160,8 @@ class LiteRTSplitCacheExportableModuleForDecoderOnlyLM(
       mask.update({
           'local': torch.ones(mask_shape, dtype=torch.float32),
       })
+    else:
+      assert False, "update this!"
     sample_inputs.update({
         'mask': mask,
         'pos_emb': pos_emb,

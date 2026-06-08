@@ -41,17 +41,20 @@ def get_prefill_decode_exportables(
         gemma3n_exportable.LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder,
     )
   elif model_config.model_type == 'gemma4':
-    assert (
-        not export_config.split_cache
-    ), 'Split cache is not supported for Gemma4.'
-    assert (
-        export_config.externalize_embedder
-    ), 'External embedder is required for Gemma4.'
-    print('Using Gemma4 exportables.')
-    return (
-        gemma4_exportable.LiteRTExportableModuleForDecoderOnlyLMPrefillExternalEmbedder,
-        gemma4_exportable.LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder,
-    )
+    if model_config.get_text_config().hidden_size_per_layer_input:
+      assert (
+          not export_config.split_cache
+      ), 'Split cache is not supported for Gemma4.'
+      assert (
+          export_config.externalize_embedder
+      ), 'External embedder is required for Gemma4.'
+      print('Using Gemma4 exportables.')
+      return (
+          gemma4_exportable.LiteRTExportableModuleForDecoderOnlyLMPrefillExternalEmbedder,
+          gemma4_exportable.LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder,
+      )
+    else:
+      return None
   else:
     pass
   return None

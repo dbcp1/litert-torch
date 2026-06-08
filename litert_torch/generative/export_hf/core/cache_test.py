@@ -193,6 +193,67 @@ class CacheTest(googletest.TestCase):
     self.assertLen(flattened_list, num_layers * 2)
     self.assertLen(flattend_names, num_layers * 2)
 
+  def test_gemma4_cache(self):
+    class MockGemma4Config:
+
+      def __init__(self):
+        self.num_hidden_layers = 4
+        self.num_key_value_heads = 2
+        self.num_global_key_value_heads = 4
+        self.global_head_dim = 128
+        self.head_dim = 64
+        self.hidden_size = 256
+        self.num_attention_heads = 8
+        self.layer_types = [
+            "local_attention",
+            "full_attention",
+            "local_attention",
+            "full_attention",
+        ]
+        self.num_kv_shared_layers = 1
+
+    model_config = MockGemma4Config()
+    export_config = cache_lib.ExportableModuleConfig(
+        model="dummy_model",
+        cache_length=1024,
+        batch_size=1,
+        k_ts_idx=2,
+        v_ts_idx=2,
+    )
+
+    # Create cache
+    kv_cache = cache_lib.LiteRTLMCache.create_from_config(
+        model_config, export_config
+    )
+
+    # Verify that only 3 layers are created (num_layers - num_shared_layers)
+    self.assertLen(kv_cache.layers, 3)
+
+    # Verify shapes of created layers
+    # Layer 0: local_attention (uses default num_kv_heads=2, head_dim=64)
+    self.assertEqual(kv_cache.layers[0].keys.shape, (1, 2, 1024, 64))
+    self.assertEqual(kv_cache.layers[0].values.shape, (1, 2, 1024, 64))
+
+    # Layer 1: full_attention (uses global_num_kv_heads=4, global_head_dim=128)
+    self.assertEqual(kv_cache.layers[1].keys.shape, (1, 4, 1024, 128))
+    self.assertEqual(kv_cache.layers[1].values.shape, (1, 4, 1024, 128))
+
+    # Layer 2: local_attention (uses default num_kv_heads=2, head_dim=64)
+    self.assertEqual(kv_cache.layers[2].keys.shape, (1, 2, 1024, 64))
+    self.assertEqual(kv_cache.layers[2].values.shape, (1, 2, 1024, 64))
+
+    # Test insert_dummy_cache_layers
+    kv_cache.insert_dummy_cache_layers(model_config)
+    self.assertLen(kv_cache.layers, 4)
+    self.assertTrue(
+        torch.allclose(kv_cache.layers[3].keys, kv_cache.layers[0].keys)
+    )
+
+    # Test remove_dummy_cache_layers
+    kv_cache.remove_dummy_cache_layers(model_config)
+    self.assertLen(kv_cache.layers, 3)
+
+
 
 if __name__ == "__main__":
   googletest.main()

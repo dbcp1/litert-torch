@@ -24,7 +24,8 @@ Shape annotations used here:
   H: head dimension
 """
 
-from typing import List, Self, Tuple
+import copy
+from typing import List, Tuple
 import jaxtyping as jt
 from litert_torch.generative.export_hf.core import exportable_module_config
 import litert_torch.generative.export_hf.core.cache_base as cache_base_lib
@@ -166,17 +167,30 @@ class LiteRTLMSplitCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
       **kwargs,
   ):
     """Infers the KV cache shape from the model config."""
-    del layer_index  # Unused.
     del kwargs  # Unused.
     cache_length = export_config.cache_length
     batch_size = export_config.batch_size
     k_ts_idx = export_config.k_ts_idx
     v_ts_idx = export_config.v_ts_idx
     num_kv_heads = model_config.num_key_value_heads
+    if hasattr(model_config, "num_global_key_value_heads") and hasattr(
+        model_config, "layer_types"
+    ):
+      layer_type = model_config.layer_types[layer_index]
+      if layer_type == "full_attention":
+        num_kv_heads = model_config.num_global_key_value_heads or num_kv_heads
     embed_size_per_head = (
         getattr(model_config, "head_dim", None)
         or model_config.hidden_size // model_config.num_attention_heads
     )
+    if hasattr(model_config, "global_head_dim") and hasattr(
+        model_config, "layer_types"
+    ):
+      layer_type = model_config.layer_types[layer_index]
+      if layer_type == "full_attention":
+        embed_size_per_head = (
+            model_config.global_head_dim or embed_size_per_head
+        )
 
     if k_ts_idx == 2:
       k_cache_shape = (
@@ -217,7 +231,7 @@ class LiteRTLMSplitCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
       layer_index,
       export_config: ExportableModuleConfig,
       **kwargs,
-  ) -> Self:
+  ) -> "LiteRTLMSplitCacheLayer":
     """Creates a KV cache from the model config."""
     k_cache_shape, v_cache_shape = cls._infer_cache_shape_from_config(
         model_config, layer_index, export_config, **kwargs
@@ -237,11 +251,12 @@ class LiteRTLMSplitCache(cache_base_lib.LiteRTLMCacheMixin):
       model_config,
       export_config: ExportableModuleConfig,
       **kwargs,
-  ) -> Self:
+  ) -> "LiteRTLMSplitCache":
     """Creates a KV cache from the model config."""
     num_layers = model_config.num_hidden_layers
+    num_shared_layers = getattr(model_config, "num_kv_shared_layers", 0)
     layers = []
-    for layer_index in range(num_layers):
+    for layer_index in range(num_layers - num_shared_layers):
       layers.append(
           LiteRTLMSplitCacheLayer.create_from_config(
               model_config,
@@ -252,10 +267,27 @@ class LiteRTLMSplitCache(cache_base_lib.LiteRTLMCacheMixin):
       )
     return cls(layers)
 
+  def insert_dummy_cache_layers(self, model_config):
+    num_layers = model_config.num_hidden_layers
+    num_shared_layers = getattr(model_config, "num_kv_shared_layers", 0)
+    num_unshared_layers = num_layers - num_shared_layers
+    assert len(self.layers) == num_unshared_layers
+    for i in range(num_shared_layers):
+      self.layers.append(copy.copy(self.layers[i % num_unshared_layers]))
+    return self
+
+  def remove_dummy_cache_layers(self, model_config):
+    num_layers = model_config.num_hidden_layers
+    num_shared_layers = getattr(model_config, "num_kv_shared_layers", 0)
+    num_unshared_layers = num_layers - num_shared_layers
+    assert len(self.layers) == num_layers
+    self.layers = self.layers[:num_unshared_layers]
+    return self
+
 
 def _flatten_kvc_t(
     kvc: LiteRTLMSplitCache,
-) -> Tuple[List[torch.Tensor], Tuple[List[str], Tuple[int, int]]]:
+) -> Tuple[List[torch.Tensor], Tuple[List[str], Tuple[int, int, int, int]]]:
   """Flattens the KV cache to a list of tensors."""
   flattened = []
   flat_names = []
@@ -276,7 +308,7 @@ def _flatten_kvc_t(
       flat_names.append(f"k_{i}_slice")
       flattened.append(cache_layer.values[1])
       flat_names.append(f"v_{i}_slice")
-  return flattened, [flat_names, (batch_size, num_layers, k_ts_idx, v_ts_idx)]
+  return flattened, (flat_names, (batch_size, num_layers, k_ts_idx, v_ts_idx))
 
 
 def _unflatten_kvc_t(

@@ -33,10 +33,13 @@ def update_export_config(
           export_config, cache_implementation='LiteRTLFM2Cache'
       )
     case 'gemma4':
-      if export_config.split_cache:
-        raise ValueError('Split cache is not supported for Gemma4.')
-      return dataclasses.replace(
-          export_config, cache_implementation='LiteRTCacheForGemma4'
-      )
+      if model_config.get_text_config().hidden_size_per_layer_input:
+        if export_config.split_cache:
+          raise ValueError('Split cache is not supported for Gemma4.')
+        return dataclasses.replace(
+            export_config, cache_implementation='LiteRTLMCache'
+        )
+      else:
+        return export_config
     case _:
       return export_config

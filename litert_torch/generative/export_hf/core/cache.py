@@ -24,7 +24,8 @@ Shape annotations used here:
   H: head dimension
 """
 
-from typing import Any, List, Tuple, Dict
+import copy
+from typing import Any, Dict, List, Tuple
 
 import jaxtyping as jt
 import litert_torch.generative.custom_ops.dynamic_update_slice as tfl_dus
@@ -231,16 +232,29 @@ class LiteRTLMCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
       export_config: ExportableModuleConfig,
   ):
     """Infers the KV cache shape from the model config."""
-    del layer_index  # Unused.
     cache_length = export_config.cache_length
     batch_size = export_config.batch_size
     k_ts_idx = export_config.k_ts_idx
     v_ts_idx = export_config.v_ts_idx
     num_kv_heads = model_config.num_key_value_heads
+    if hasattr(model_config, "num_global_key_value_heads") and hasattr(
+        model_config, "layer_types"
+    ):
+      layer_type = model_config.layer_types[layer_index]
+      if layer_type == "full_attention":
+        num_kv_heads = model_config.num_global_key_value_heads or num_kv_heads
     embed_size_per_head = (
         getattr(model_config, "head_dim", None)
         or model_config.hidden_size // model_config.num_attention_heads
     )
+    if hasattr(model_config, "global_head_dim") and hasattr(
+        model_config, "layer_types"
+    ):
+      layer_type = model_config.layer_types[layer_index]
+      if layer_type == "full_attention":
+        embed_size_per_head = (
+            model_config.global_head_dim or embed_size_per_head
+        )
 
     if k_ts_idx == 2:
       k_cache_shape = (
@@ -312,8 +326,9 @@ class LiteRTLMCache(cache_base_lib.LiteRTLMCacheMixin):
   ) -> "LiteRTLMCache":
     """Creates a KV cache from the model config."""
     num_layers = model_config.num_hidden_layers
+    num_shared_layers = getattr(model_config, "num_kv_shared_layers", 0)
     layers = []
-    for layer_index in range(num_layers):
+    for layer_index in range(num_layers - num_shared_layers):
       layers.append(
           LiteRTLMCacheLayer.create_from_config(
               model_config,
@@ -323,6 +338,23 @@ class LiteRTLMCache(cache_base_lib.LiteRTLMCacheMixin):
           )
       )
     return cls(layers)
+
+  def insert_dummy_cache_layers(self, model_config):
+    num_layers = model_config.num_hidden_layers
+    num_shared_layers = getattr(model_config, "num_kv_shared_layers", 0)
+    num_unshared_layers = num_layers - num_shared_layers
+    assert len(self.layers) == num_unshared_layers
+    for i in range(num_shared_layers):
+      self.layers.append(copy.copy(self.layers[i % num_unshared_layers]))
+    return self
+
+  def remove_dummy_cache_layers(self, model_config):
+    num_layers = model_config.num_hidden_layers
+    num_shared_layers = getattr(model_config, "num_kv_shared_layers", 0)
+    num_unshared_layers = num_layers - num_shared_layers
+    assert len(self.layers) == num_layers
+    self.layers = self.layers[:num_unshared_layers]
+    return self
 
 
 def _flatten_kvc_t(

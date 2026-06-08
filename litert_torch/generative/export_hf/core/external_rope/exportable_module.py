@@ -26,8 +26,14 @@ class RoPEEmbedder(torch.nn.Module):
     super().__init__()
     self.model = model
 
-    assert self.model.model.original_rotary_emb is not None
-    self.rotary_emb = self.model.model.original_rotary_emb
+    try:
+      self.rotary_emb = model.model.original_rotary_emb
+    except AttributeError:
+      self.rotary_emb = (
+          model.model.language_model.original_rotary_emb
+      )
+
+    assert self.rotary_emb is not None
     self.has_local_rope = utils.has_local_rope(model)
 
   def forward(
@@ -39,17 +45,23 @@ class RoPEEmbedder(torch.nn.Module):
 
     if self.has_local_rope:
       pos_emb = self.rotary_emb(dummy, position_ids, 'full_attention')
+      if pos_emb[0].ndim == 3:
+        pos_emb = [x.unsqueeze(-2) for x in pos_emb]
       ret = {
           'pos_emb_cos': pos_emb[0],
           'pos_emb_sin': pos_emb[1],
       }
       pos_emb_local = self.rotary_emb(dummy, position_ids, 'sliding_attention')
+      if pos_emb_local[0].ndim == 3:
+        pos_emb_local = [x.unsqueeze(-2) for x in pos_emb_local]
       ret.update({
           'pos_emb_local_cos': pos_emb_local[0],
           'pos_emb_local_sin': pos_emb_local[1],
       })
     else:
       pos_emb = self.rotary_emb(dummy, position_ids)
+      if pos_emb[0].ndim == 3:
+        pos_emb = [x.unsqueeze(-2) for x in pos_emb]
       ret = {
           'pos_emb_cos': pos_emb[0],
           'pos_emb_sin': pos_emb[1],

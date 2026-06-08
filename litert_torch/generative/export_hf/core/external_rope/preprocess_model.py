@@ -39,10 +39,14 @@ class RotaryPositionEmbeddingInjector(torch.nn.Module):
 
 def inject_rotary_position_embedding(model):
   """Injects RotaryPositionEmbedding."""
-  if hasattr(model, 'language_model'):
-    raise ValueError(
-        'inject_rotary_position_embedding should be called on the text model.'
+  try:
+    model.model.original_rotary_emb = model.model.rotary_emb
+    model.model.rotary_emb = RotaryPositionEmbeddingInjector(model.model.config)
+  except AttributeError:
+    model.model.language_model.original_rotary_emb = (
+        model.model.language_model.rotary_emb
     )
-  model.model.original_rotary_emb = model.model.rotary_emb
-  model.model.rotary_emb = RotaryPositionEmbeddingInjector(model.model.config)
+    model.model.language_model.rotary_emb = RotaryPositionEmbeddingInjector(
+        model.model.language_model.config
+    )
   return model
