@@ -67,6 +67,77 @@ class TestLora(googletest.TestCase):
     )
     self.assertEqual(lora.get_rank(), 16)
 
+  def test_safetensors_to_tflite_conversion(self):
+    """Converts safetensors file to TFLite model and verifies tensors and metadata."""
+    from tensorflow.lite.python import schema_py_generated as schema_fb  # pylint: disable=g-direct-tensorflow-import
+
+    tensor_names = lora_utils.LoRATensorNames(
+        attn_query_w_a=(
+            "base_model.model.model.layers.{}.self_attn.q_proj.lora_A.weight"
+        ),
+        attn_query_w_b=(
+            "base_model.model.model.layers.{}.self_attn.q_proj.lora_B.weight"
+        ),
+        attn_key_w_a=(
+            "base_model.model.model.layers.{}.self_attn.k_proj.lora_A.weight"
+        ),
+        attn_key_w_b=(
+            "base_model.model.model.layers.{}.self_attn.k_proj.lora_B.weight"
+        ),
+        attn_value_w_a=(
+            "base_model.model.model.layers.{}.self_attn.v_proj.lora_A.weight"
+        ),
+        attn_value_w_b=(
+            "base_model.model.model.layers.{}.self_attn.v_proj.lora_B.weight"
+        ),
+        attn_output_w_a=(
+            "base_model.model.model.layers.{}.self_attn.o_proj.lora_A.weight"
+        ),
+        attn_output_w_b=(
+            "base_model.model.model.layers.{}.self_attn.o_proj.lora_B.weight"
+        ),
+    )
+
+    safetensors_file = resource_loader.get_path_to_datafile(
+        "fixtures/test_lora_rank16.safetensors"
+    )
+    config = self._get_test_config(num_layers=1, head_dim=8, num_query_groups=1)
+    lora = lora_utils.LoRA.from_safetensors(
+        safetensors_file,
+        scale=1.0,
+        lora_tensor_names=tensor_names,
+        config=config,
+    )
+
+    flatbuffer_model = lora.to_tflite()
+
+    # Verify the flatbuffer outputs using TFLite's schema
+    model = schema_fb.Model.GetRootAsModel(flatbuffer_model, 0)
+    model = schema_fb.ModelT.InitFromObj(model)
+
+    # 1. Verify that lora_rank metadata has been packed correctly
+    self.assertLen(model.metadata, 1)
+    self.assertEqual(model.metadata[0].name.decode("utf-8"), "lora_rank")
+    self.assertEqual(model.metadata[0].buffer, 16)
+
+    # 2. Verify all subgraph input tensors are present with matching names
+    subgraph = model.subgraphs[0]
+    tensor_names_in_model = [t.name.decode("utf-8") for t in subgraph.tensors]
+
+    expected_tensor_names = [
+        "lora_atten_q_a_prime_weight_0",
+        "lora_atten_q_b_prime_weight_0",
+        "lora_atten_k_a_prime_weight_0",
+        "lora_atten_k_b_prime_weight_0",
+        "lora_atten_v_a_prime_weight_0",
+        "lora_atten_v_b_prime_weight_0",
+        "lora_atten_o_a_prime_weight_0",
+        "lora_atten_o_b_prime_weight_0",
+    ]
+
+    for expected_name in expected_tensor_names:
+      self.assertIn(expected_name, tensor_names_in_model)
+
   def test_torch_export(self):
     """Tests the export of the LoRA module."""
 

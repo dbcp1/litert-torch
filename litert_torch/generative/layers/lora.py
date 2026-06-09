@@ -544,12 +544,24 @@ def _lora_to_flatbuffers(lora: LoRA) -> bytearray:
   builder.PrependUOffsetTRelative(subgraph_offset)
   subgraphs_offset = builder.EndVector()
 
+  # Add metadata for "lora_rank"
+  metadata_name_offset = builder.CreateString("lora_rank")
+  schema_fb.MetadataStart(builder)
+  schema_fb.MetadataAddName(builder, metadata_name_offset)
+  schema_fb.MetadataAddBuffer(builder, lora.get_rank())
+  metadata_offset = schema_fb.MetadataEnd(builder)
+
+  schema_fb.ModelStartMetadataVector(builder, 1)
+  builder.PrependUOffsetTRelative(metadata_offset)
+  metadata_vector_offset = builder.EndVector()
+
   string_offset = builder.CreateString("lora_params")
   schema_fb.ModelStart(builder)
   schema_fb.ModelAddVersion(builder, _TFLITE_SCHEMA_VERSION)
   schema_fb.ModelAddDescription(builder, string_offset)
   schema_fb.ModelAddBuffers(builder, buffers_offset)
   schema_fb.ModelAddSubgraphs(builder, subgraphs_offset)
+  schema_fb.ModelAddMetadata(builder, metadata_vector_offset)
   model_offset = schema_fb.ModelEnd(builder)
   builder.Finish(model_offset, file_identifier=_TFLITE_FILE_IDENTIFIER)
   flatbuffer_model = builder.Output()
