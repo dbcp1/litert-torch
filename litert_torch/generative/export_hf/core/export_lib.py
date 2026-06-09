@@ -14,6 +14,7 @@
 # ==============================================================================
 """Export library for HF integration."""
 
+import contextlib
 import dataclasses
 import gc
 import json
@@ -112,6 +113,34 @@ def verify_model_compatibility(model, model_config, text_model_config):
   elif not supports_attention_backend:
     print(utils.ERROR_MESSAGE)
     print('Model does not support attention backend.')
+
+
+@contextlib.contextmanager
+def patch_builtin_tuple_for_export():
+  """Context manager that temporarily injects a .to() method into Python's
+
+  built-in tuple type, and safely removes it upon exiting the scope.
+  """
+  tuple_dict = gc.get_referents(tuple.__dict__)[0]
+
+  had_original = 'to' in tuple_dict
+  original_to = tuple_dict.get('to')
+
+  def tuple_to(self, *args, **kwargs):
+    return tuple(
+        item.to(*args, **kwargs) if hasattr(item, 'to') else item
+        for item in self
+    )
+
+  tuple_dict['to'] = tuple_to
+
+  try:
+    yield
+  finally:
+    if had_original:
+      tuple_dict['to'] = original_to
+    else:
+      del tuple_dict['to']
 
 
 @progress.task('Load source model')
@@ -328,10 +357,11 @@ def export_text_prefill_decode_model(
         sample_kwargs=sample_decode_inputs,
     )
 
-  lrt_model = converter.convert(
-      lightweight_conversion=export_config.experimental_lightweight_conversion,
-      strict_export=False,
-  )
+  with patch_builtin_tuple_for_export():
+    lrt_model = converter.convert(
+        lightweight_conversion=export_config.experimental_lightweight_conversion,
+        strict_export=False,
+    )
 
   lrt_model = mu_pass_lib.update_model(lrt_model)
   if export_config.experimental_use_mixed_precision:

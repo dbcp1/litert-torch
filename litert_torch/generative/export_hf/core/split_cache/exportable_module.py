@@ -50,6 +50,13 @@ class LiteRTSplitCacheExportableModuleForDecoderOnlyLM(
       pos_emb_local_cos = None
       pos_emb_local_sin = None
     sliding_window = getattr(self.model.config, 'sliding_window', None)
+    if not sliding_window:
+      try:
+        sliding_window = getattr(
+            self.model.config.text_config, 'sliding_window'
+        )
+      except AttributeError:
+        sliding_window = None
 
     if sliding_window is not None:
       masks = {
@@ -160,8 +167,6 @@ class LiteRTSplitCacheExportableModuleForDecoderOnlyLM(
       mask.update({
           'local': torch.ones(mask_shape, dtype=torch.float32),
       })
-    else:
-      assert False, "update this!"
     sample_inputs.update({
         'mask': mask,
         'pos_emb': pos_emb,

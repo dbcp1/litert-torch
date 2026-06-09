@@ -545,7 +545,7 @@ class Executor:
     if self.decode_per_layer_embedder_runner:
       ple_input_embeds = {
           'per_layer_embeddings': try_run_signature_with_quant_dequant(
-              {'embedding': input_tokens},
+              {'token_ids': input_tokens},
               self.decode_per_layer_embedder_runner,
           )['embeddings']
       }

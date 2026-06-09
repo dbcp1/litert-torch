@@ -24,6 +24,7 @@ Shape annotations used here:
   H: head dimension
 """
 
+from collections.abc import Sequence
 import copy
 from typing import List, Tuple
 import jaxtyping as jt
@@ -49,6 +50,41 @@ ValueSlice = (
 
 KeyCacheEntry = Tuple[KeyCache, KeySlice | None]
 ValueCacheEntry = Tuple[ValueCache, ValueSlice | None]
+
+
+class SplitCacheTuple(Sequence):
+  """A tuple that holds the split KV cache."""
+
+  def __init__(self, iterable=()):
+    self._data = tuple(iterable)
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return type(self)(self._data[index])
+    return self._data[index]
+
+  def __len__(self):
+    return len(self._data)
+
+  def __repr__(self):
+    return repr(self._data)
+
+  def to(self, dtype):
+    return type(self)(item.to(dtype) for item in self._data)
+
+
+def split_cache_tuple_flatten(tup: SplitCacheTuple):
+  return list(tup._data), None  # pylint: disable=protected-access
+
+
+def split_cache_tuple_unflatten(values, context):
+  del context
+  return SplitCacheTuple(values)
+
+
+pytree.register_pytree_node(
+    SplitCacheTuple, split_cache_tuple_flatten, split_cache_tuple_unflatten
+)
 
 
 class LiteRTLMSplitCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
@@ -113,7 +149,7 @@ class LiteRTLMSplitCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
       value_states: torch.Tensor,
       *args,
       **kwargs,
-  ) -> tuple[torch.Tensor, torch.Tensor]:
+  ) -> SplitCacheTuple:
     seq_len = key_states.shape[2]
     self.cumulative_length += seq_len
 
@@ -144,7 +180,7 @@ class LiteRTLMSplitCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
     self.keys = (self.keys[0], key_states)
     self.values = (self.values[0], value_states)
 
-    return self.keys, self.values
+    return SplitCacheTuple([self.keys, self.values])
 
   def get_mask_sizes(self, cache_position: torch.Tensor):
     """Return a tuple (kv_length, kv_offset) corresponding to the length and offset that will be returned for."""
