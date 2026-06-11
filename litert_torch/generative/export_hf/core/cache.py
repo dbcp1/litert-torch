@@ -92,9 +92,11 @@ def _update_kv_impl(
     cache_position: jt.Int32[torch.Tensor, "T"],
     k_ts_idx: int,
     v_ts_idx: int,
+    **kwargs,
 ):
   """Updates the cache buffer using tfl.dynamic_update_slice."""
   cache_dim = 4
+
   positions = cache_position[0]  # The position of the first input token.
   k_slice_indices = _get_slice_indices(positions.clone(), cache_dim, k_ts_idx)
   v_slice_indices = _get_slice_indices(positions.clone(), cache_dim, v_ts_idx)
@@ -201,6 +203,8 @@ class LiteRTLMCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
     assert (
         cache_position is not None
     ), "For export, cache position should always be set."
+    merged_kwargs = {**kwargs, **cache_kwargs}
+    merged_kwargs.pop("cache_position", None)
     self.keys, self.values = _update_kv_impl(
         self.keys,
         self.values,
@@ -209,6 +213,7 @@ class LiteRTLMCacheLayer(cache_base_lib.LiteRTLMCacheLayerMixin):
         cache_position,
         self.k_ts_idx,
         self.v_ts_idx,
+        **merged_kwargs,
     )
     return self.keys, self.values
 

@@ -30,8 +30,19 @@ class LiteRTExportableModuleForDecoderOnlyLMPrefillExternalEmbedder(
       input_pos,
       kv_cache,
       mask,
+      **kwargs,
   ):
-    inputs = self.adapt_inputs(None, embeddings, input_pos, kv_cache, mask)
+    inputs = self.adapt_inputs(
+        None,
+        embeddings,
+        input_pos,
+        kv_cache,
+        mask,
+        use_bool_mask=self.export_config.extra_kwargs.get(
+            "use_bool_mask", False
+        ),
+        **kwargs,
+    )
     inputs |= self.attention_kwargs()
     output = self.model(**inputs)
     return {"kv_cache": output.past_key_values}
@@ -63,8 +74,19 @@ class LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder(
       input_pos,
       kv_cache,
       mask,
+      **kwargs,
   ):
-    inputs = self.adapt_inputs(None, embeddings, input_pos, kv_cache, mask)
+    inputs = self.adapt_inputs(
+        None,
+        embeddings,
+        input_pos,
+        kv_cache,
+        mask,
+        use_bool_mask=self.export_config.extra_kwargs.get(
+            "use_bool_mask", False
+        ),
+        **kwargs,
+    )
     inputs |= self.attention_kwargs()
     output = self.model(**inputs)
     return {"kv_cache": output.past_key_values, "logits": output.logits}

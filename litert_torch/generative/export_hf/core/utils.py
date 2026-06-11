@@ -25,6 +25,7 @@ def create_sliding_mask(
     cache_len: int,
     sliding_window_size: int,
     mask_value: float = -1e4,
+    use_bool_mask: bool = False,
 ) -> torch.Tensor:
   """Creates mask for sliding window attention (PyTorch)."""
   # Use torch.arange to create a tensor with a range of integers in a
@@ -34,11 +35,22 @@ def create_sliding_mask(
   segment_pos_expanded = segment_pos.clone().unsqueeze(-1)  # [B, seq_len, 1]
 
   # Create boolean masks for window boundaries.
-  left_boundary = cache_positions > segment_pos_expanded - sliding_window_size
-  right_boundary = cache_positions < segment_pos_expanded + sliding_window_size
+  if use_bool_mask:
+    left_boundary = segment_pos_expanded >= cache_positions
+    right_boundary = (
+        segment_pos_expanded < cache_positions + sliding_window_size
+    )
+  else:
+    left_boundary = cache_positions > segment_pos_expanded - sliding_window_size
+    right_boundary = (
+        cache_positions < segment_pos_expanded + sliding_window_size
+    )
 
   # Combine boolean masks (AND).
   sliding_mask_bool = left_boundary & right_boundary
+
+  if use_bool_mask:
+    return sliding_mask_bool.unsqueeze(0)
 
   # Convert boolean mask to float mask with 0 and -inf.
   sliding_mask = torch.where(

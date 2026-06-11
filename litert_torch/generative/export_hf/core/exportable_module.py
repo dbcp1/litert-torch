@@ -65,6 +65,8 @@ class LiteRTExportableModuleForDecoderOnlyLM(ExportableModuleBase):
       input_pos,
       kv_cache,
       mask,
+      use_bool_mask: bool = False,
+      **kwargs,
   ):
     if hasattr(self.model.config, "text_config"):
       text_config = self.model.config.text_config
@@ -82,14 +84,22 @@ class LiteRTExportableModuleForDecoderOnlyLM(ExportableModuleBase):
           layer_types is not None and "sliding_attention" in layer_types
       ) or is_mistral
       if need_sliding_mask:
-        masks["sliding_attention"] = (
-            utils.create_sliding_mask(
-                input_pos.clone().unsqueeze(0),
-                kv_cache.get_max_cache_shape(),
-                sliding_window,
-            )
-            + mask
-        )
+        if use_bool_mask:
+          masks["sliding_attention"] = utils.create_sliding_mask(
+              input_pos.clone().unsqueeze(0),
+              kv_cache.get_max_cache_shape(),
+              sliding_window,
+              use_bool_mask=True,
+          )
+        else:
+          masks["sliding_attention"] = (
+              utils.create_sliding_mask(
+                  input_pos.clone().unsqueeze(0),
+                  kv_cache.get_max_cache_shape(),
+                  sliding_window,
+              )
+              + mask
+          )
       if is_mistral:
         masks = masks["sliding_attention"]
     else:
@@ -156,8 +166,19 @@ class LiteRTExportableModuleForDecoderOnlyLMPrefill(
       input_pos,
       kv_cache,
       mask,
+      **kwargs,
   ):
-    inputs = self.adapt_inputs(tokens, None, input_pos, kv_cache, mask)
+    inputs = self.adapt_inputs(
+        tokens,
+        None,
+        input_pos,
+        kv_cache,
+        mask,
+        use_bool_mask=self.export_config.extra_kwargs.get(
+            "use_bool_mask", False
+        ),
+        **kwargs,
+    )
     inputs |= self.attention_kwargs()
     output = self.model(**inputs)
     return {"kv_cache": output.past_key_values}
@@ -176,6 +197,7 @@ class LiteRTExportableModuleForDecoderOnlyLMPrefill(
 
   def get_sample_inputs(self, model_config, **kwargs):
     export_config = self.export_config
+    use_bool_mask = export_config.extra_kwargs.get("use_bool_mask", False)
     kv_cache_inputs, kv_cache_dynamic_shapes = self.get_sample_kv_cache(
         model_config
     )
@@ -193,9 +215,11 @@ class LiteRTExportableModuleForDecoderOnlyLMPrefill(
           **tokens,
           "input_pos": torch.ones((prefill_length), dtype=torch.int32),
           "mask": torch.ones(
-              (1, 1, prefill_length, cache_length), dtype=torch.float32
+              (1, 1, prefill_length, cache_length),
+              dtype=torch.bool if use_bool_mask else torch.float32,
           ),
       }
+
       inputs.update(kv_cache_inputs)
       if export_config.prefill_length_dim is not None:
         dynamic_shapes = {
@@ -224,8 +248,19 @@ class LiteRTExportableModuleForDecoderOnlyLMGenerate(
       input_pos,
       kv_cache,
       mask,
+      **kwargs,
   ):
-    inputs = self.adapt_inputs(tokens, None, input_pos, kv_cache, mask)
+    inputs = self.adapt_inputs(
+        tokens,
+        None,
+        input_pos,
+        kv_cache,
+        mask,
+        use_bool_mask=self.export_config.extra_kwargs.get(
+            "use_bool_mask", False
+        ),
+        **kwargs,
+    )
     inputs |= self.attention_kwargs()
     output = self.model(**inputs)
     return {"kv_cache": output.past_key_values, "logits": output.logits}
@@ -242,6 +277,7 @@ class LiteRTExportableModuleForDecoderOnlyLMGenerate(
 
   def get_sample_inputs(self, model_config):
     export_config = self.export_config
+    use_bool_mask = export_config.extra_kwargs.get("use_bool_mask", False)
     kv_cache_inputs, kv_cache_dynamic_shapes = self.get_sample_kv_cache(
         model_config
     )
@@ -256,8 +292,12 @@ class LiteRTExportableModuleForDecoderOnlyLMGenerate(
     inputs = {
         **tokens,
         "input_pos": torch.ones((1), dtype=torch.int32),
-        "mask": torch.ones((1, 1, 1, cache_length), dtype=torch.float32),
+        "mask": torch.ones(
+            (1, 1, 1, cache_length),
+            dtype=torch.bool if use_bool_mask else torch.float32,
+        ),
     }
+
     inputs.update(kv_cache_inputs)
     if export_config.cache_length_dim is not None:
       decode_dynamic_shapes = {

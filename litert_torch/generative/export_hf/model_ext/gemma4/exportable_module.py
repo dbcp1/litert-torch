@@ -31,8 +31,11 @@ class LiteRTExportableModuleForDecoderOnlyLMPrefillExternalEmbedder(
       input_pos,
       kv_cache,
       mask,
+      **kwargs,
   ):
-    inputs = super().adapt_inputs(tokens, embeddings, input_pos, kv_cache, mask)
+    inputs = super().adapt_inputs(
+        tokens, embeddings, input_pos, kv_cache, mask, **kwargs
+    )
     inputs["per_layer_inputs"] = per_layer_embeddings
     return inputs
 
@@ -44,9 +47,19 @@ class LiteRTExportableModuleForDecoderOnlyLMPrefillExternalEmbedder(
       input_pos,
       kv_cache,
       mask,
+      **kwargs,
   ):
     inputs = self.adapt_inputs(
-        None, embeddings, per_layer_embeddings, input_pos, kv_cache, mask
+        None,
+        embeddings,
+        per_layer_embeddings,
+        input_pos,
+        kv_cache,
+        mask,
+        use_bool_mask=self.export_config.extra_kwargs.get(
+            "use_bool_mask", False
+        ),
+        **kwargs,
     )
     inputs["past_key_values"] = inputs[
         "past_key_values"
@@ -101,8 +114,11 @@ class LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder(
       input_pos,
       kv_cache,
       mask,
+      **kwargs,
   ):
-    inputs = super().adapt_inputs(tokens, embeddings, input_pos, kv_cache, mask)
+    inputs = super().adapt_inputs(
+        tokens, embeddings, input_pos, kv_cache, mask, **kwargs
+    )
     inputs["per_layer_inputs"] = per_layer_embeddings
     return inputs
 
@@ -114,9 +130,19 @@ class LiteRTExportableModuleForDecoderOnlyLMGenerateExternalEmbedder(
       input_pos,
       kv_cache,
       mask,
+      **kwargs,
   ):
     inputs = self.adapt_inputs(
-        None, embeddings, per_layer_embeddings, input_pos, kv_cache, mask
+        None,
+        embeddings,
+        per_layer_embeddings,
+        input_pos,
+        kv_cache,
+        mask,
+        use_bool_mask=self.export_config.extra_kwargs.get(
+            "use_bool_mask", False
+        ),
+        **kwargs,
     )
     inputs["past_key_values"] = inputs[
         "past_key_values"
