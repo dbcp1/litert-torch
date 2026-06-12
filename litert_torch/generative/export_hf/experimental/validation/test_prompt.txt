@@ -1,0 +1,48 @@
+You are an advanced data extraction and conversion assistant. Your task is to ingest two disparate, messy sources of information (a customer service transcript and a raw system log) and convert them into a single, highly structured, valid JSON object.
+
+Strict Output Rule: Return ONLY a valid JSON object. Do not include markdown formatting, backticks (e.g., ```json), introductory text, or concluding text. If your output is not parseable by standard JSON engines, the task is a failure.
+
+### Target Schema Definition:
+{
+  "ticket_id": string (Format: "TIC-" followed by 4 digits),
+  "customer": {
+    "full_name": string,
+    "tier": "VIP" | "Enterprise" | "Standard" | "Unknown"
+  },
+  "technical_incident": {
+    "component": "Authentication" | "Billing" | "UI/UX" | "Database" | "Unknown",
+    "error_code": string or null,
+    "resolution_status": "Resolved" | "Escalated" | "Pending Action"
+  },
+  "financial_dispute": {
+    "dispute_found": boolean,
+    "amount_disputed": number or null,
+    "expected_resolution_days": integer or null
+  },
+  "metrics": {
+    "initial_customer_sentiment": "Angry" | "Frustrated" | "Neutral" | "Calm",
+    "final_customer_sentiment": "Satisfied" | "Unresolved" | "Escalated"
+  }
+}
+
+### Conversion Logic & Edge Cases:
+1. Dates/Deadlines: If a deadline is mentioned implicitly (e.g., "by the end of the week", "within 3 business days"), calculate the integer number of days from the log date (Sunday, June 7, 2026) and output it as an integer.
+2. Contradictions: If the transcript and the system log conflict regarding whether an issue was resolved, prioritize the factual system log over the user's verbal acknowledgment.
+3. Component Mapping: Map the reported issue strictly to one of the four allowed enum values under "component". If it doesn't fit, use "Unknown".
+
+### Source Material 1: Support Transcript
+Agent (Sarah): Thanks for contacting enterprise support, my name is Sarah. Am I speaking with Mr. Henderson?
+Customer: Yeah, Arthur Henderson. Look, I'm incredibly frustrated. I’ve been trying to log into my portal since yesterday afternoon and it keeps throwing a 502 Bad Gateway error. I’m a VIP tier member—or at least my company pays for it—so this shouldn't be happening.
+Sarah: I completely understand, Mr. Henderson. Let me check your profile. Yes, I see your VIP status. The 502 error usually means our authentication server is temporarily desynced from your corporate SSO. Let me try forcing a hard reset on the security tokens from our end. 
+Customer: Well, hurry up please, I have a presentation in two hours. Also, while you're looking at that, I checked my invoice this morning and I was totally double-charged for our premium seats. It says $450 instead of $225. Someone needs to credit that back by Friday.
+Sarah: I see the duplicate charge here. It looks like an automated system glitch hit our billing pipeline on the 1st. I am escalating the billing issue to our finance team right now. They usually process credits within 3 business days, so that will be done by Wednesday. As for the login issue, I’ve just forced a hard reset on your SSO bridge. Can you try logging in again?
+Customer: Hold on... okay, typing the password. Hey, it worked! I’m in. Thank goodness. But look, that billing thing is critical. If I don't see that $225 credit by the end of the week, our accounting department is going to lose their minds.
+Sarah: Absolutely, I’ve marked the billing ticket as high priority for the finance queue. Is there anything else?
+Customer: No, that's it. Just fix that bill. Thanks, Sarah.
+
+### Source Material 2: Raw System Log
+2026-06-07 09:41:12 [TICKET] Created ID: TIC-9942
+2026-06-07 09:42:01 [ERR] Auth bridge connection timeout for UID-8831A (Henderson, A.). HTTP 502.
+2026-06-07 09:43:05 [SYS] Hard reset triggered on SSO link by agent_id: 4412.
+2026-06-07 09:43:55 [INFO] User successfully authenticated via SAML2.0.
+2026-06-07 09:44:10 [TICKET] Finance escalation pipeline failure. Ticket TIC-9942 locked in 'Pending Action' state due to API disconnect. Manual override required.
