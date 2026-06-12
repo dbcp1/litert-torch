@@ -658,6 +658,43 @@ def export_additional_models(
   return exported_model_artifacts
 
 
+def _maybe_patch_tokenizer(tokenizer_path: str) -> None:
+  """Patches BPE tokenizer if it has Metaspace pre-tokenizer but BPE chars in vocab."""
+  if not tokenizer_path.endswith('.json'):
+    return
+  with open(tokenizer_path, 'r') as f:
+    try:
+      data = json.load(f)
+    except json.JSONDecodeError:
+      return
+
+  is_bpe = data.get('model', {}).get('type') == 'BPE'
+  has_metaspace = data.get('pre_tokenizer', {}).get('type') == 'Metaspace'
+
+  vocab = data.get('model', {}).get('vocab', {})
+  has_bpe_chars = any('Ġ' in k or 'Ċ' in k for k in vocab.keys())
+
+  if is_bpe and has_metaspace and has_bpe_chars:
+    print(
+        'WARNING: Detected BPE tokenizer with Metaspace pre-tokenizer but BPE'
+        ' characters in vocab. Patching to ByteLevel.'
+    )
+    data['pre_tokenizer'] = {
+        'type': 'ByteLevel',
+        'add_prefix_space': False,
+        'trim_offsets': True,
+        'use_regex': True,
+    }
+    data['decoder'] = {
+        'type': 'ByteLevel',
+        'add_prefix_space': True,
+        'trim_offsets': False,
+        'use_regex': True,
+    }
+    with open(tokenizer_path, 'w') as f:
+      json.dump(data, f, indent=2)
+
+
 @progress.task('Export tokenizer')
 def export_tokenizer(
     source_model_artifacts: SourceModelArtifacts,
@@ -687,6 +724,7 @@ def export_tokenizer(
       ]
       assert len(tokenizer_path) == 1
       tokenizer_path = tokenizer_path[0]
+    _maybe_patch_tokenizer(tokenizer_path)
     return dataclasses.replace(
         exported_model_artifacts,
         tokenizer_model_path=tokenizer_path,
