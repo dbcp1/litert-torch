@@ -81,8 +81,6 @@ class ExportedModelArtifacts:
 
 def verify_model_compatibility(model, model_config, text_model_config):
   """Verifies model compatibility."""
-  del model_config  # Unused.
-
   # Validating compatibility...
   # NOTE: Currently we don't throw errors for model incompatibilities.
   rope_type = getattr(text_model_config, 'rope_type', 'default')
@@ -113,6 +111,13 @@ def verify_model_compatibility(model, model_config, text_model_config):
   elif not supports_attention_backend:
     print(utils.ERROR_MESSAGE)
     print('Model does not support attention backend.')
+
+  if (
+      hasattr(model_config, 'quantization_config')
+      and model_config.quantization_config
+  ):
+    print(utils.ERROR_MESSAGE)
+    raise NotImplementedError('Quantized checkpoint is not supported yet.')
 
 
 @contextlib.contextmanager
