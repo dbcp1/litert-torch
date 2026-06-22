@@ -21,7 +21,6 @@ from litert_converter.mlir import ir
 from litert_converter.mlir.dialects import func
 import torch
 import torch.utils._pytree as pytree
-from litert_converter.mlir._mlir_libs import converter_api_ext
 
 # std::numeric_limits<int64_t>::min()
 IR_DYNAMIC = -9223372036854775808
@@ -106,6 +105,9 @@ def is_iterable(v):
 
 
 def create_ir_context():
+  # pylint: disable=g-import-not-at-top
+  from litert_converter.mlir._mlir_libs import converter_api_ext
+  # pylint: enable=g-import-not-at-top
   context = ir.Context()
   converter_api_ext.prepare_mlir_context(context)
   return context

@@ -27,8 +27,6 @@ from litert_converter.mlir import ir
 from litert_converter.mlir import passmanager
 import torch
 
-from litert_converter.mlir._mlir_libs import converter_api_ext
-
 
 def _get_output_names(
     exported_program: torch.export.ExportedProgram,
@@ -75,6 +73,9 @@ class LazyModelExporter(model_lib.ModelExporter):
       return
 
     with progress.task(f"Write Model to {path}"):
+      # pylint: disable=g-import-not-at-top
+      from litert_converter.mlir._mlir_libs import converter_api_ext
+      # pylint: enable=g-import-not-at-top
       try:
         # TODO b/478909085 - Remove the try-except once converter_api_ext is
         # stable in OSS.
@@ -88,6 +89,9 @@ class LazyModelExporter(model_lib.ModelExporter):
       return self.content
 
     with progress.task("Write Model to Bytes"):
+      # pylint: disable=g-import-not-at-top
+      from litert_converter.mlir._mlir_libs import converter_api_ext
+      # pylint: enable=g-import-not-at-top
       try:
         # TODO b/478909085 - Remove the try-except once converter_api_ext is
         # stable in OSS.
@@ -111,6 +115,9 @@ def exported_programs_to_flatbuffer(
     runtime_constant_folding: bool | None = None,
 ) -> LazyModelExporter:
   """Convert ExportedPrograms to a LiteRT model."""
+  # pylint: disable=g-import-not-at-top
+  from litert_converter.mlir._mlir_libs import converter_api_ext
+  # pylint: enable=g-import-not-at-top
   if not exported_programs:
     raise ValueError("The number of exported programs must be greater than 0.")
   if len(exported_programs) != len(signatures):
