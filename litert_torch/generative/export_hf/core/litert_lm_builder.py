@@ -185,16 +185,50 @@ def build_llm_metadata(
       tu = llm_metadata.stop_tokens.add()
       tu.token_str = stop_token
 
-    if gen_config and gen_config.do_sample:
+    sampler_top_k = export_config.sampler_top_k
+    sampler_top_p = export_config.sampler_top_p
+    sampler_temperature = export_config.sampler_temperature
+
+    has_custom_sampler = (
+        sampler_top_k is not None
+        or sampler_top_p is not None
+        or sampler_temperature is not None
+    )
+
+    if has_custom_sampler or (gen_config and getattr(gen_config, 'do_sample', False)):
       sampler_params = llm_metadata.sampler_params
-      if gen_config.top_k:
-        sampler_params.type = sampler_params_pb2.SamplerParameters.TOP_K
-        sampler_params.k = gen_config.top_k
-      if gen_config.top_p:
+
+      final_top_k = (
+          sampler_top_k
+          if sampler_top_k is not None
+          else (getattr(gen_config, 'top_k', None) if gen_config else None)
+      )
+      final_top_p = (
+          sampler_top_p
+          if sampler_top_p is not None
+          else (getattr(gen_config, 'top_p', None) if gen_config else None)
+      )
+      final_temperature = (
+          sampler_temperature
+          if sampler_temperature is not None
+          else (getattr(gen_config, 'temperature', None) if gen_config else None)
+      )
+
+      if final_top_k is not None:
+        sampler_params.k = final_top_k
+      if final_top_p is not None:
+        sampler_params.p = final_top_p
+      if final_temperature is not None:
+        sampler_params.temperature = final_temperature
+
+      if final_top_k == 1:
+        sampler_params.type = sampler_params_pb2.SamplerParameters.GREEDY
+      elif final_top_p is not None:
         sampler_params.type = sampler_params_pb2.SamplerParameters.TOP_P
-        sampler_params.p = gen_config.top_p
-      if gen_config.temperature:
-        sampler_params.temperature = gen_config.temperature
+      elif final_top_k is not None:
+        sampler_params.type = sampler_params_pb2.SamplerParameters.TOP_K
+      else:
+        sampler_params.type = sampler_params_pb2.SamplerParameters.TOP_P
 
   if chat_templates is not None:
     if isinstance(chat_templates, str):

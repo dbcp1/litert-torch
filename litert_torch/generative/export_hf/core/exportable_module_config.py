@@ -62,6 +62,9 @@ class ExportableModuleConfig:
   vision_encoder_quantization_recipe: str | None = "dynamic_wi8_afp32"
   litert_lm_model_type_override: str | None = None
   litert_lm_llm_metadata_override: str | None = None
+  sampler_top_p: float | None = None
+  sampler_temperature: float | None = None
+  sampler_top_k: int | None = None
   jinja_chat_template_override: str | None = None
 
   experimental_lightweight_conversion: bool = False
