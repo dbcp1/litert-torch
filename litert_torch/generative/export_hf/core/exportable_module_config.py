@@ -68,6 +68,7 @@ class ExportableModuleConfig:
   jinja_chat_template_override: str | None = None
 
   experimental_lightweight_conversion: bool = False
+  experimental_transpile_chat_template_for_minijinja: bool = False
 
   # AOT Compilation.
   aot_backend: str | None = None

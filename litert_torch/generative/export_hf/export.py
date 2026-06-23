@@ -107,6 +107,7 @@ def export(
     aot_soc_model: str | None = None,
     aot_compilation_config_dict: dict[str, Any] | None = None,
     experimental_lightweight_conversion: bool = False,
+    experimental_transpile_chat_template_for_minijinja: bool = False,
     # pylint: enable=unused-argument
     **kwargs,
 ):

@@ -20,6 +20,7 @@ import os
 from litert_torch import progress
 from litert_torch.generative.export_hf.core import export_lib
 from litert_torch.generative.export_hf.core import exportable_module
+from litert_torch.generative.export_hf.experimental.minijinja_transpile import transpile as transpile_lib
 from litert_torch.generative.export_hf.model_ext import metadata_builder as metadata_builder_lib
 
 import litert_lm_builder as litertlm_builder
@@ -232,6 +233,8 @@ def build_llm_metadata(
 
   if chat_templates is not None:
     if isinstance(chat_templates, str):
+      if export_config.experimental_transpile_chat_template_for_minijinja:
+        chat_templates = transpile_lib.transpile_jinja2(chat_templates)
       llm_metadata.jinja_prompt_template = chat_templates
     else:
       sys_prompt_parts, user_prompt_parts, model_prompt_parts = chat_templates
@@ -279,6 +282,7 @@ def build_llm_metadata(
               generic_model=llm_model_type_pb2.GenericModel()
           )
       )
+
   # Model specific metadata builders.
   if not litert_lm_model_type_override:
     metadata_builder = metadata_builder_lib.get_metadata_builder(model.config)
@@ -288,6 +292,13 @@ def build_llm_metadata(
         exported_model_artifacts,
         llm_metadata,
     )
+  # Check thinking channel is properly set up.
+  if isinstance(chat_templates, str):
+    if '<think>' in chat_templates and not llm_metadata.channels:
+      channel = llm_metadata.channels.add()
+      channel.channel_name = 'thought'
+      channel.start = '<think>'
+      channel.end = '</think>'
 
   return llm_metadata
 
