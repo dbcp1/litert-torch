@@ -30,6 +30,7 @@ importlib.metadata.version = patched_version
 
 from absl.testing import absltest
 from absl.testing import parameterized
+import litert_torch
 from litert_torch.generative.export_hf.core import exportable_module_config
 from litert_torch.generative.export_hf.model_ext import patches as patches_lib
 from litert_torch.generative.export_hf.model_ext.qwen3_5 import modeling_qwen3_5_static
@@ -112,6 +113,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           testcase_name="fuse_qkv_only",
           fuse_qkv=True,
           use_rope_composite=False,
+          use_qkv_norm_rope_composite=False,
           partial_rotary_factor=0.25,
           with_bias=False,
       ),
@@ -119,6 +121,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           testcase_name="fuse_qkv_with_bias",
           fuse_qkv=True,
           use_rope_composite=False,
+          use_qkv_norm_rope_composite=False,
           partial_rotary_factor=0.25,
           with_bias=True,
       ),
@@ -126,6 +129,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           testcase_name="rope_composite_partial",
           fuse_qkv=False,
           use_rope_composite=True,
+          use_qkv_norm_rope_composite=False,
           partial_rotary_factor=0.25,
           with_bias=False,
       ),
@@ -133,6 +137,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           testcase_name="rope_composite_full",
           fuse_qkv=False,
           use_rope_composite=True,
+          use_qkv_norm_rope_composite=False,
           partial_rotary_factor=1.0,
           with_bias=False,
       ),
@@ -140,7 +145,32 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           testcase_name="fuse_qkv_and_rope_composite",
           fuse_qkv=True,
           use_rope_composite=True,
+          use_qkv_norm_rope_composite=False,
           partial_rotary_factor=0.25,
+          with_bias=False,
+      ),
+      dict(
+          testcase_name="qkv_norm_rope_composite_partial",
+          fuse_qkv=False,
+          use_rope_composite=False,
+          use_qkv_norm_rope_composite=True,
+          partial_rotary_factor=0.25,
+          with_bias=False,
+      ),
+      dict(
+          testcase_name="qkv_norm_rope_composite_partial_with_bias",
+          fuse_qkv=True,
+          use_rope_composite=False,
+          use_qkv_norm_rope_composite=True,
+          partial_rotary_factor=0.25,
+          with_bias=True,
+      ),
+      dict(
+          testcase_name="qkv_norm_rope_composite_full",
+          fuse_qkv=True,
+          use_rope_composite=False,
+          use_qkv_norm_rope_composite=True,
+          partial_rotary_factor=1.0,
           with_bias=False,
       ),
   )
@@ -148,12 +178,15 @@ class Qwen3_5PatchTest(parameterized.TestCase):
       self,
       fuse_qkv: bool,
       use_rope_composite: bool,
+      use_qkv_norm_rope_composite: bool,
       partial_rotary_factor: float,
       with_bias: bool,
   ):
     torch.manual_seed(0)
     cfg = self._make_config(partial_rotary_factor=partial_rotary_factor)
     orig_attn = modeling_qwen3_5.Qwen3_5Attention(cfg, layer_idx=1).eval()
+    orig_attn.q_norm.weight.data.uniform_(-0.2, 0.2)
+    orig_attn.k_norm.weight.data.uniform_(-0.2, 0.2)
     if with_bias:
       orig_attn.q_proj.bias = torch.nn.Parameter(
           torch.randn(orig_attn.q_proj.out_features)
@@ -169,6 +202,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
         orig_attn,
         fuse_qkv=fuse_qkv,
         use_rope_composite=use_rope_composite,
+        use_qkv_norm_rope_composite=use_qkv_norm_rope_composite,
     ).eval()
 
     x = torch.randn(1, 4, cfg.hidden_size)
@@ -183,7 +217,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
       )
       torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-5)
 
-      if use_rope_composite:
+      if use_rope_composite or use_qkv_norm_rope_composite:
         actual_default_pos, _ = fused_attn(x, pos_emb, attention_mask=None)
         torch.testing.assert_close(
             actual_default_pos, expected, rtol=1e-5, atol=1e-5
@@ -202,6 +236,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           fuse_qkv=False,
           use_swiglu_composite=False,
           use_rope_composite=False,
+          use_qkv_norm_rope_composite=False,
       ),
       dict(
           testcase_name="fuse_gate_up_only",
@@ -209,6 +244,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           fuse_qkv=False,
           use_swiglu_composite=False,
           use_rope_composite=False,
+          use_qkv_norm_rope_composite=False,
       ),
       dict(
           testcase_name="swiglu_composite_only",
@@ -216,6 +252,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           fuse_qkv=False,
           use_swiglu_composite=True,
           use_rope_composite=False,
+          use_qkv_norm_rope_composite=False,
       ),
       dict(
           testcase_name="fuse_qkv_only",
@@ -223,6 +260,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           fuse_qkv=True,
           use_swiglu_composite=False,
           use_rope_composite=False,
+          use_qkv_norm_rope_composite=False,
       ),
       dict(
           testcase_name="rope_composite_only",
@@ -230,6 +268,15 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           fuse_qkv=False,
           use_swiglu_composite=False,
           use_rope_composite=True,
+          use_qkv_norm_rope_composite=False,
+      ),
+      dict(
+          testcase_name="qkv_norm_rope_composite_only",
+          fuse_gate_up=False,
+          fuse_qkv=False,
+          use_swiglu_composite=False,
+          use_rope_composite=False,
+          use_qkv_norm_rope_composite=True,
       ),
       dict(
           testcase_name="all_combined",
@@ -237,6 +284,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           fuse_qkv=True,
           use_swiglu_composite=True,
           use_rope_composite=True,
+          use_qkv_norm_rope_composite=True,
       ),
   )
   def test_patch_qwen3_5_model_combinations(
@@ -245,6 +293,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
       fuse_qkv: bool,
       use_swiglu_composite: bool,
       use_rope_composite: bool,
+      use_qkv_norm_rope_composite: bool,
   ):
     torch.manual_seed(0)
     cfg = self._make_config()
@@ -268,6 +317,7 @@ class Qwen3_5PatchTest(parameterized.TestCase):
         fuse_qkv=fuse_qkv,
         use_swiglu_composite=use_swiglu_composite,
         use_rope_composite=use_rope_composite,
+        use_qkv_norm_rope_composite=use_qkv_norm_rope_composite,
     )
 
     with patches_lib.patch_model(model, "qwen3_5", export_config):
@@ -288,13 +338,20 @@ class Qwen3_5PatchTest(parameterized.TestCase):
           )
 
         if hasattr(layer, "self_attn"):
-          if fuse_qkv or use_rope_composite:
+          if fuse_qkv or use_rope_composite or use_qkv_norm_rope_composite:
             self.assertIsInstance(
                 layer.self_attn, patch.FusedQwen3_5Attention
             )
-            self.assertEqual(layer.self_attn.fuse_qkv, fuse_qkv)
+            self.assertEqual(
+                layer.self_attn.fuse_qkv,
+                fuse_qkv or use_qkv_norm_rope_composite,
+            )
             self.assertEqual(
                 layer.self_attn.use_rope_composite, use_rope_composite
+            )
+            self.assertEqual(
+                layer.self_attn.use_qkv_norm_rope_composite,
+                use_qkv_norm_rope_composite,
             )
           else:
             self.assertIsInstance(
@@ -321,6 +378,41 @@ class Qwen3_5PatchTest(parameterized.TestCase):
         self.assertIsInstance(
             layer.self_attn, modeling_qwen3_5.Qwen3_5Attention
         )
+
+  def test_qkv_norm_rope_composite_lowering(self):
+    torch.manual_seed(0)
+    cfg = self._make_config(partial_rotary_factor=0.25)
+    orig_attn = modeling_qwen3_5.Qwen3_5Attention(cfg, layer_idx=1).eval()
+    orig_attn.q_norm.weight.data.uniform_(-0.2, 0.2)
+    orig_attn.k_norm.weight.data.uniform_(-0.2, 0.2)
+    fused_attn = patch.FusedQwen3_5Attention(
+        orig_attn,
+        fuse_qkv=True,
+        use_qkv_norm_rope_composite=True,
+    ).eval()
+
+    class AttentionWrapper(torch.nn.Module):
+
+      def __init__(self, attn: torch.nn.Module):
+        super().__init__()
+        self.attn = attn
+
+      def forward(self, x: torch.Tensor, pos_ids: torch.Tensor) -> torch.Tensor:
+        dummy_emb = (
+            torch.zeros(1, 4, 4, dtype=x.dtype),
+            torch.zeros(1, 4, 4, dtype=x.dtype),
+        )
+        out, _ = self.attn(
+            x, dummy_emb, attention_mask=None, position_ids=pos_ids
+        )
+        return out
+
+    wrapper = AttentionWrapper(fused_attn).eval()
+    x = torch.randn(1, 4, cfg.hidden_size)
+    pos_ids = torch.arange(4, dtype=torch.int32).unsqueeze(0)
+
+    edge_model = litert_torch.convert(wrapper, (x, pos_ids))
+    self.assertIn(b"odml.qkv_norm_rope", edge_model.model_content())
 
 
 if __name__ == "__main__":

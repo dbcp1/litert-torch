@@ -16,6 +16,7 @@
 
 import contextlib
 from typing import Any
+from litert_torch.generative.export_hf.experimental.composites import qkv_norm_rope as qkv_norm_rope_composite
 from litert_torch.generative.export_hf.experimental.composites import rope as rope_composite
 from litert_torch.generative.export_hf.experimental.composites import swiglu as swiglu_composite
 from litert_torch.generative.export_hf.model_ext import patches as patches_lib
@@ -107,6 +108,7 @@ class FusedQwen3_5Attention(torch.nn.Module):
       original_attn: modeling_qwen3_5.Qwen3_5Attention,
       fuse_qkv: bool = True,
       use_rope_composite: bool = False,
+      use_qkv_norm_rope_composite: bool = False,
   ):
     super().__init__()
     self.config = original_attn.config
@@ -138,21 +140,63 @@ class FusedQwen3_5Attention(torch.nn.Module):
     self.q_norm = original_attn.q_norm
     self.k_norm = original_attn.k_norm
     self.o_proj = original_attn.o_proj
-    self.fuse_qkv = fuse_qkv
+    self.fuse_qkv = fuse_qkv or use_qkv_norm_rope_composite
     self.use_rope_composite = use_rope_composite
+    self.use_qkv_norm_rope_composite = use_qkv_norm_rope_composite
 
     self.q_size = original_attn.q_proj.out_features
     self.k_size = original_attn.k_proj.out_features
     self.v_size = original_attn.v_proj.out_features
+    self.q_only_size = self.num_heads * self.head_dim
+    self.gate_size = self.num_heads * self.head_dim
+    self.qkv_only_size = self.q_only_size + self.k_size + self.v_size
 
-    if fuse_qkv:
-      q_w = original_attn.q_proj.weight.data
-      k_w = original_attn.k_proj.weight.data
-      v_w = original_attn.v_proj.weight.data
-      fused_weight = torch.cat([q_w, k_w, v_w], dim=0)
+    if self.fuse_qkv:
       has_bias = original_attn.q_proj.bias is not None
-
       total_out_dim = self.q_size + self.k_size + self.v_size
+      perm: torch.Tensor | None = None
+
+      if self.use_qkv_norm_rope_composite:
+        # De-interleave per-head [Q (head_dim), Gate (head_dim)] rows from
+        # q_proj so the fused projection produces [Q, K, V, Gate] contiguously
+        # and [Q, K, V] can be fed directly into odml.qkv_norm_rope.
+        q_raw_w = original_attn.q_proj.weight.data.view(
+            self.num_heads, 2, self.head_dim, -1
+        )
+        q_only_w = q_raw_w[:, 0, :, :].clone()
+        gate_w = q_raw_w[:, 1, :, :].reshape(self.gate_size, -1)
+        k_w = original_attn.k_proj.weight.data.view(
+            self.num_key_value_heads, self.head_dim, -1
+        ).clone()
+        v_w = original_attn.v_proj.weight.data
+
+        _, partial_factor = self._get_rope_params()
+        rotary_dim = int(self.head_dim * partial_factor)
+        if 0 < rotary_dim < self.head_dim:
+          # Align Qwen3.5 partial RoPE channel pairs (i, i + rotary_dim // 2)
+          # with odml.qkv_norm_rope's half-head layout (i, i + head_dim // 2).
+          perm = self._get_partial_rope_perm(rotary_dim, q_only_w.device)
+          q_only_w = q_only_w[:, perm, :]
+          k_w = k_w[:, perm, :]
+
+        self.q_norm = self._build_composite_rms_norm(self.q_norm, perm)
+        self.k_norm = self._build_composite_rms_norm(self.k_norm, perm)
+
+        fused_weight = torch.cat(
+            [
+                q_only_w.reshape(self.q_only_size, -1),
+                k_w.reshape(self.k_size, -1),
+                v_w,
+                gate_w,
+            ],
+            dim=0,
+        )
+      else:
+        q_w = original_attn.q_proj.weight.data
+        k_w = original_attn.k_proj.weight.data
+        v_w = original_attn.v_proj.weight.data
+        fused_weight = torch.cat([q_w, k_w, v_w], dim=0)
+
       self.qkv_proj = torch.nn.Linear(
           self.config.hidden_size,
           total_out_dim,
@@ -162,14 +206,78 @@ class FusedQwen3_5Attention(torch.nn.Module):
       )
       self.qkv_proj.weight = torch.nn.Parameter(fused_weight)
       if has_bias:
-        q_b = original_attn.q_proj.bias.data
-        k_b = original_attn.k_proj.bias.data
-        v_b = original_attn.v_proj.bias.data
-        self.qkv_proj.bias = torch.nn.Parameter(torch.cat([q_b, k_b, v_b], dim=0))
+        if self.use_qkv_norm_rope_composite:
+          q_raw_b = original_attn.q_proj.bias.data.view(
+              self.num_heads, 2, self.head_dim
+          )
+          q_only_b = q_raw_b[:, 0, :].clone()
+          gate_b = q_raw_b[:, 1, :].reshape(self.gate_size)
+          k_b = original_attn.k_proj.bias.data.view(
+              self.num_key_value_heads, self.head_dim
+          ).clone()
+          v_b = original_attn.v_proj.bias.data
+          if perm is not None:
+            q_only_b = q_only_b[:, perm]
+            k_b = k_b[:, perm]
+          fused_bias = torch.cat(
+              [
+                  q_only_b.reshape(self.q_only_size),
+                  k_b.reshape(self.k_size),
+                  v_b,
+                  gate_b,
+              ],
+              dim=0,
+          )
+        else:
+          q_b = original_attn.q_proj.bias.data
+          k_b = original_attn.k_proj.bias.data
+          v_b = original_attn.v_proj.bias.data
+          fused_bias = torch.cat([q_b, k_b, v_b], dim=0)
+        self.qkv_proj.bias = torch.nn.Parameter(fused_bias)
     else:
       self.q_proj = original_attn.q_proj
       self.k_proj = original_attn.k_proj
       self.v_proj = original_attn.v_proj
+
+  def _get_partial_rope_perm(
+      self, rotary_dim: int, device: torch.device
+  ) -> torch.Tensor:
+    half_rot = rotary_dim // 2
+    half_dim = self.head_dim // 2
+    first_pass_len = half_dim - half_rot
+    pass_indices = torch.arange(rotary_dim, self.head_dim, device=device)
+    perm = torch.empty(self.head_dim, dtype=torch.long, device=device)
+    perm[:half_rot] = torch.arange(half_rot, device=device)
+    perm[half_rot:half_dim] = pass_indices[:first_pass_len]
+    perm[half_dim : half_dim + half_rot] = torch.arange(
+        half_rot, rotary_dim, device=device
+    )
+    perm[half_dim + half_rot :] = pass_indices[first_pass_len:]
+    return perm
+
+  def _build_composite_rms_norm(
+      self,
+      norm_module: torch.nn.Module,
+      perm: torch.Tensor | None,
+  ) -> Qwen3_5RMSNorm:
+    eps = float(
+        getattr(
+            norm_module,
+            "eps",
+            getattr(self.config, "rms_norm_eps", 1e-6),
+        )
+    )
+    weight = norm_module.weight.detach().to(torch.float32).clone()
+    if isinstance(
+        norm_module,
+        (modeling_qwen3_5.Qwen3_5RMSNorm, modular_qwen3_5.Qwen3_5RMSNorm),
+    ):
+      weight = weight + 1.0
+    if perm is not None:
+      weight = weight[perm]
+    composite_norm = Qwen3_5RMSNorm(weight.shape[0], eps=eps)
+    composite_norm.weight = torch.nn.Parameter(weight)
+    return composite_norm
 
   def _get_rope_params(self) -> tuple[float, float]:
     rope_base = 1000000.0
@@ -203,26 +311,9 @@ class FusedQwen3_5Attention(torch.nn.Module):
     input_shape = hidden_states.shape[:-1]
     hidden_shape = (*input_shape, -1, self.head_dim)
 
-    if self.fuse_qkv:
-      qkv = self.qkv_proj(hidden_states)
-      q_raw, k_raw, v_raw = qkv.split(
-          [self.q_size, self.k_size, self.v_size], dim=-1
-      )
-    else:
-      q_raw = self.q_proj(hidden_states)
-      k_raw = self.k_proj(hidden_states)
-      v_raw = self.v_proj(hidden_states)
-
-    query_states, gate = torch.chunk(
-        q_raw.view(*input_shape, -1, self.head_dim * 2), 2, dim=-1
-    )
-    gate = gate.reshape(*input_shape, -1)
-
-    query_states = self.q_norm(query_states.view(hidden_shape)).transpose(1, 2)
-    key_states = self.k_norm(k_raw.view(hidden_shape)).transpose(1, 2)
-    value_states = v_raw.view(hidden_shape).transpose(1, 2)
-
-    if getattr(self, "use_rope_composite", False):
+    if getattr(self, "use_qkv_norm_rope_composite", False) and self.fuse_qkv:
+      qkvg = self.qkv_proj(hidden_states)
+      qkv, gate = qkvg.split([self.qkv_only_size, self.gate_size], dim=-1)
       position_ids = kwargs.get("position_ids", None)
       if position_ids is None:
         seq_len = hidden_states.shape[1]
@@ -232,36 +323,94 @@ class FusedQwen3_5Attention(torch.nn.Module):
       elif position_ids.ndim == 1:
         position_ids = position_ids.unsqueeze(0)
       rope_base, partial_factor = self._get_rope_params()
-      rotary_dim = int(self.head_dim * partial_factor)
-      if rotary_dim == self.head_dim:
-        query_states = rope_composite.apply_mldrift_compatible_rope(
-            query_states, position_ids, base=rope_base, head_dim=self.head_dim
-        )
-        key_states = rope_composite.apply_mldrift_compatible_rope(
-            key_states, position_ids, base=rope_base, head_dim=self.head_dim
+      effective_base = (
+          rope_base ** (1.0 / partial_factor)
+          if 0.0 < partial_factor < 1.0
+          else rope_base
+      )
+      eps = float(
+          getattr(
+              self.q_norm,
+              "eps",
+              getattr(self.config, "rms_norm_eps", 1e-6),
+          )
+      )
+      query_states, key_states, value_states = (
+          qkv_norm_rope_composite.apply_qkv_norm_rope(
+              qkv,
+              position_ids,
+              self.q_norm.weight,
+              self.k_norm.weight,
+              num_heads=self.num_heads,
+              num_kv_heads=self.num_key_value_heads,
+              head_dim=self.head_dim,
+              base=effective_base,
+              eps=eps,
+              proportion=partial_factor,
+          )
+      )
+    else:
+      if self.fuse_qkv:
+        qkv = self.qkv_proj(hidden_states)
+        q_raw, k_raw, v_raw = qkv.split(
+            [self.q_size, self.k_size, self.v_size], dim=-1
         )
       else:
-        q_rot, q_pass = (
-            query_states[..., :rotary_dim],
-            query_states[..., rotary_dim:],
-        )
-        k_rot, k_pass = (
-            key_states[..., :rotary_dim],
-            key_states[..., rotary_dim:],
-        )
-        q_rot = rope_composite.apply_mldrift_compatible_rope(
-            q_rot, position_ids, base=rope_base, head_dim=rotary_dim
-        )
-        k_rot = rope_composite.apply_mldrift_compatible_rope(
-            k_rot, position_ids, base=rope_base, head_dim=rotary_dim
-        )
-        query_states = torch.cat([q_rot, q_pass], dim=-1)
-        key_states = torch.cat([k_rot, k_pass], dim=-1)
-    else:
-      cos, sin = position_embeddings
-      query_states, key_states = modeling_qwen3_5.apply_rotary_pos_emb(
-          query_states, key_states, cos, sin
+        q_raw = self.q_proj(hidden_states)
+        k_raw = self.k_proj(hidden_states)
+        v_raw = self.v_proj(hidden_states)
+
+      query_states, gate = torch.chunk(
+          q_raw.view(*input_shape, -1, self.head_dim * 2), 2, dim=-1
       )
+      gate = gate.reshape(*input_shape, -1)
+
+      query_states = self.q_norm(query_states.view(hidden_shape)).transpose(
+          1, 2
+      )
+      key_states = self.k_norm(k_raw.view(hidden_shape)).transpose(1, 2)
+      value_states = v_raw.view(hidden_shape).transpose(1, 2)
+
+      if getattr(self, "use_rope_composite", False):
+        position_ids = kwargs.get("position_ids", None)
+        if position_ids is None:
+          seq_len = hidden_states.shape[1]
+          position_ids = torch.arange(
+              seq_len, device=hidden_states.device
+          ).unsqueeze(0)
+        elif position_ids.ndim == 1:
+          position_ids = position_ids.unsqueeze(0)
+        rope_base, partial_factor = self._get_rope_params()
+        rotary_dim = int(self.head_dim * partial_factor)
+        if rotary_dim == self.head_dim:
+          query_states = rope_composite.apply_mldrift_compatible_rope(
+              query_states, position_ids, base=rope_base, head_dim=self.head_dim
+          )
+          key_states = rope_composite.apply_mldrift_compatible_rope(
+              key_states, position_ids, base=rope_base, head_dim=self.head_dim
+          )
+        else:
+          q_rot, q_pass = (
+              query_states[..., :rotary_dim],
+              query_states[..., rotary_dim:],
+          )
+          k_rot, k_pass = (
+              key_states[..., :rotary_dim],
+              key_states[..., rotary_dim:],
+          )
+          q_rot = rope_composite.apply_mldrift_compatible_rope(
+              q_rot, position_ids, base=rope_base, head_dim=rotary_dim
+          )
+          k_rot = rope_composite.apply_mldrift_compatible_rope(
+              k_rot, position_ids, base=rope_base, head_dim=rotary_dim
+          )
+          query_states = torch.cat([q_rot, q_pass], dim=-1)
+          key_states = torch.cat([k_rot, k_pass], dim=-1)
+      else:
+        cos, sin = position_embeddings
+        query_states, key_states = modeling_qwen3_5.apply_rotary_pos_emb(
+            query_states, key_states, cos, sin
+        )
 
     if past_key_values is not None:
       key_states, value_states = past_key_values.update(
@@ -298,6 +447,9 @@ def apply_qwen3_5_model_patches(
   fuse_qkv = getattr(export_config, "fuse_qkv", False)
   use_rope = getattr(export_config, "use_rope_composite", False)
   use_swiglu = getattr(export_config, "use_swiglu_composite", False)
+  use_qkv_norm_rope = getattr(
+      export_config, "use_qkv_norm_rope_composite", False
+  )
   extra_kwargs = getattr(export_config, "extra_kwargs", None) or {}
   use_fused_gdn = extra_kwargs.get(
       "use_fused_gdn", getattr(export_config, "use_fused_gdn", True)
@@ -338,11 +490,12 @@ def apply_qwen3_5_model_patches(
         replaced_modules.append((module, child_name, child))
       elif isinstance(child, modeling_qwen3_5.Qwen3_5Attention):
         replace_modules(child)
-        if fuse_qkv or use_rope:
+        if fuse_qkv or use_rope or use_qkv_norm_rope:
           fused = FusedQwen3_5Attention(
               child,
-              fuse_qkv=fuse_qkv,
+              fuse_qkv=fuse_qkv or use_qkv_norm_rope,
               use_rope_composite=use_rope,
+              use_qkv_norm_rope_composite=use_qkv_norm_rope,
           )
           setattr(module, child_name, fused)
           replaced_modules.append((module, child_name, child))
