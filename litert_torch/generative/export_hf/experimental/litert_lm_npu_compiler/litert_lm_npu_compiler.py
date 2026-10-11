@@ -321,6 +321,7 @@ def compile_litertlm(
 
           should_compile = False
           extra_flags: list[str] = []
+          subgraphs_override: list[int] | None = None
 
           if model_type in configs:
             if isinstance(configs[model_type], list):
@@ -331,6 +332,9 @@ def compile_litertlm(
               flags_val = configs[model_type].get('flags', [])
               if isinstance(flags_val, list):
                 extra_flags = list(flags_val)
+              subgraphs_val = configs[model_type].get('subgraphs')
+              if isinstance(subgraphs_val, list):
+                subgraphs_override = [int(s) for s in subgraphs_val]
 
           if model_type == 'aux' and disable_aux_compilation:
             should_compile = False
@@ -394,7 +398,13 @@ def compile_litertlm(
               sections_to_clear_constraint.append(model_type)
             logging.info('Compiling model %s (%s)', model_type, model_path)
 
-            subgraphs = _resolve_subgraphs_to_compile(model_path, model_type)
+            if subgraphs_override is not None:
+              subgraphs = sorted(set(subgraphs_override))
+              logging.info(
+                  'Using configured subgraphs for %s: %s', model_type, subgraphs
+              )
+            else:
+              subgraphs = _resolve_subgraphs_to_compile(model_path, model_type)
 
             kwargs = {}
             for flag in extra_flags:
