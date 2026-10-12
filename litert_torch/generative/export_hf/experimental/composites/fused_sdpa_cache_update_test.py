@@ -15,8 +15,10 @@
 """Tests for the fused SWA attention + ring buffer cache update composite."""
 
 from absl.testing import parameterized
+import litert_torch
 from litert_torch.generative.export_hf.experimental.composites import fused_sdpa_cache_update as fused_lib
 from litert_torch.generative.export_hf.experimental.composites import sdpa
+import numpy as np
 import torch
 from absl.testing import absltest as googletest
 
@@ -239,6 +241,94 @@ class FusedSdpaCacheUpdateTest(parameterized.TestCase):
     ]
     # 7 inputs plus the outputs are marked.
     self.assertLen(marks, 7 + num_outputs)
+
+  def test_tflite_inplace_cache_aliasing(self):
+    """In-place KV cache aliasing must read old slots before overwriting them."""
+    new_len, g = 4, 2
+
+    class Wrapper(torch.nn.Module):
+
+      def forward(self, q, kc, vc, kn, vn, mask, param):
+        attn, new_k, new_v = fused_lib.fused_sdpa_cache_update(
+            q, kc, vc, kn, vn, mask, param, update_cache=True
+        )
+        return attn, new_k, new_v
+
+    sample = _Case(0, new_len, new_len, g=g)
+    sample_args = (
+        sample.query,
+        sample.key_cache,
+        sample.value_cache,
+        sample.key_new,
+        sample.value_new,
+        sample.mask,
+        sample.param,
+    )
+    edge_model = litert_torch.convert(Wrapper().eval(), sample_args)
+    self.assertIn(b"odml.fused_sdpa_cache_update", edge_model.model_content())
+
+    cm = edge_model.use_compiled_runtime()._get_compiled_model()
+    sig = "serving_default"
+    input_map = {
+        f"args_{idx}": cm.create_input_buffer_by_name(sig, f"args_{idx}")
+        for idx in range(len(sample_args))
+    }
+    out_attn = cm.create_output_buffer_by_name(sig, "output_0")
+    # Alias output_1/output_2 to the same buffers as args_1/args_2 (key_cache
+    # and value_cache), matching LiteRT-LM's in-place CPU KV cache binding.
+    output_map = {
+        "output_0": out_attn,
+        "output_1": input_map["args_1"],
+        "output_2": input_map["args_2"],
+    }
+    try:
+      for past, valid in ((0, 4), (3, 4), (6, 4), (6, 2)):
+        case = _Case(past, new_len, valid, g=g, seed=0)
+        input_map["args_0"].write(np.ascontiguousarray(case.query.numpy()))
+        input_map["args_1"].write(np.ascontiguousarray(case.key_cache.numpy()))
+        input_map["args_2"].write(
+            np.ascontiguousarray(case.value_cache.numpy())
+        )
+        input_map["args_3"].write(np.ascontiguousarray(case.key_new.numpy()))
+        input_map["args_4"].write(np.ascontiguousarray(case.value_new.numpy()))
+        input_map["args_5"].write(np.ascontiguousarray(case.mask.numpy()))
+        input_map["args_6"].write(np.ascontiguousarray(case.param.numpy()))
+
+        cm.run_by_name(sig, input_map, output_map)
+
+        attn_np = out_attn.read(
+            int(np.prod(case.query.shape)), np.float32
+        ).reshape(case.query.shape)
+        new_k_np = (
+            input_map["args_1"]
+            .read(int(np.prod(case.key_cache.shape)), np.float32)
+            .reshape(case.key_cache.shape)
+        )
+        new_v_np = (
+            input_map["args_2"]
+            .read(int(np.prod(case.value_cache.shape)), np.float32)
+            .reshape(case.value_cache.shape)
+        )
+
+        valid_rows = [r for r in range(g * new_len) if r % new_len < valid]
+        ref_attn = case.reference_attention().numpy()
+        ref_k, ref_v = case.reference_caches()
+        np.testing.assert_allclose(
+            attn_np[:, :, valid_rows],
+            ref_attn[:, :, valid_rows],
+            rtol=1e-4,
+            atol=1e-4,
+        )
+        np.testing.assert_allclose(
+            new_k_np, ref_k.numpy(), rtol=1e-4, atol=1e-4
+        )
+        np.testing.assert_allclose(
+            new_v_np, ref_v.numpy(), rtol=1e-4, atol=1e-4
+        )
+    finally:
+      for buf in input_map.values():
+        buf.destroy()
+      out_attn.destroy()
 
 
 if __name__ == "__main__":

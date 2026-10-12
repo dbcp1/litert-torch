@@ -69,6 +69,7 @@ def _ring_write(
     update: torch.Tensor,
     start: torch.Tensor,
     num_valid: torch.Tensor,
+    valid_dep: torch.Tensor,
     ts_idx: int,
 ) -> torch.Tensor:
   """Writes the last min(num_valid, W) valid tokens of `update` into `cache`."""
@@ -77,7 +78,7 @@ def _ring_write(
   idx = torch.arange(new_len, dtype=torch.int32, device=update.device)
   # Keeping only the last W valid tokens gives every slot at most one writer,
   # so the one-hot routing does not sum tokens that wrap onto the same slot.
-  keep = (idx < num_valid) & (idx >= num_valid - cache_size)
+  keep = (idx < num_valid) & (idx >= num_valid - cache_size) & valid_dep
   return gpu_cache_update.update_kv_cache_with_sliding(
       cache, update, start + idx, keep, ts_idx=ts_idx
   )
@@ -155,8 +156,8 @@ def fused_sdpa_cache_update(
     logits = logits + full_mask
   probs = F.softmax(logits, dim=-1).type_as(query)
   probs_past, probs_new = probs.split([cache_size, new_len], dim=-1)
-  attention = bmm_lib.bmm_4d(probs_past, value_cache)
-  attention = attention + bmm_lib.bmm_4d(probs_new, value_new)
+  out_past = bmm_lib.bmm_4d(probs_past, value_cache)
+  attention = out_past + bmm_lib.bmm_4d(probs_new, value_new)
 
   if not update_cache:
     # With a single output, mark_outputs returns the tensor itself.
@@ -166,7 +167,17 @@ def fused_sdpa_cache_update(
   flat_param = param_tensor.reshape(-1)
   start = flat_param[0]
   num_valid = torch.clamp(flat_param[1] - start, min=0, max=new_len)
-  new_k = _ring_write(key_cache, key_new, start, num_valid, ts_idx=2)
-  new_v = _ring_write(value_cache, value_new, start, num_valid, ts_idx=3)
+  # Force a data dependency from `out_past` (which consumes both `probs_past`
+  # derived from `key_cache` and `value_cache`) to the cache write that
+  # survives StableHLO canonicalization (`* 0` is constant-folded away).
+  # Note: this must read from the internal `out_past` tensor rather than the
+  # composite output `attention`, because TFLite's `ReplaceNodeWithSubgraph`
+  # composite inliner only remaps `decomp_node.outputs` via `output_map` and
+  # does not remap `decomp_node.inputs` that consume a subgraph output tensor.
+  valid_dep = out_past.reshape(-1)[:1].abs() >= 0
+  new_k = _ring_write(key_cache, key_new, start, num_valid, valid_dep, ts_idx=2)
+  new_v = _ring_write(
+      value_cache, value_new, start, num_valid, valid_dep, ts_idx=3
+  )
   attention, new_k, new_v = builder.mark_outputs(attention, new_k, new_v)
   return attention, new_k, new_v
