@@ -52,6 +52,21 @@ _DEPRECATED_EXTRA_KWARGS = frozenset({
 })
 
 
+# GPU composite and fusion flags that default to `True` when
+# `apply_gpu_composites=True` and `False` otherwise, unless explicitly set.
+_GPU_OPTIMIZATION_FLAGS = (
+    "fuse_gate_up",
+    "fuse_qkv",
+    "use_rope_composite",
+    "use_swiglu_composite",
+    "use_qkv_norm_rope_composite",
+    "use_short_conv_composite",
+    "use_sdpa_composite",
+    "use_bool_mask",
+    "enable_gpu_dynamic_cache",
+)
+
+
 _DTYPE_ALIASES: dict[str, torch.dtype] = {
     "float32": torch.float32,
     "fp32": torch.float32,
@@ -90,7 +105,7 @@ class ExportableModuleConfig:
   # If True, prefill lengths are adjusted to magic numbers for GPU execution.
   enable_gpu_dynamic_prefill: bool = False
   # If True, cache length is adjusted to a magic number for GPU execution.
-  enable_gpu_dynamic_cache: bool = False
+  enable_gpu_dynamic_cache: bool | None = None
   # Export configs
   externalize_embedder: bool = False
   single_token_embedder: bool = False
@@ -101,6 +116,9 @@ class ExportableModuleConfig:
   auto_model_override: str | None = None
   use_jinja_template: bool = True
   bundle_litert_lm: bool = True
+  # Moves eligible TFLite weight tensors into a separate `tflite_weights`
+  # section when packaging the `.litertlm` file.
+  externalize_weights: bool = False
   # Dtype the model is loaded and traced in (weights and graph): "float32"
   # (default when None) or "bfloat16". Not the deployment activation dtype.
   model_dtype: str | None = None
@@ -111,19 +129,19 @@ class ExportableModuleConfig:
   experimental_use_fp16: bool = False
   export_vision_encoder: bool = True
   export_audio_encoder: bool = True
-  fuse_gate_up: bool = False
-  fuse_qkv: bool = False
-  use_rope_composite: bool = False
-  use_swiglu_composite: bool = False
-  use_qkv_norm_rope_composite: bool = False
-  use_short_conv_composite: bool = False
+  fuse_gate_up: bool | None = None
+  fuse_qkv: bool | None = None
+  use_rope_composite: bool | None = None
+  use_swiglu_composite: bool | None = None
+  use_qkv_norm_rope_composite: bool | None = None
+  use_short_conv_composite: bool | None = None
   # Whether to emit the fused `odml.sdpa_transposed` composite in both prefill
   # and decode signatures.
-  use_sdpa_composite: bool = False
+  use_sdpa_composite: bool | None = None
   # Master switch for GPU composite emission. Implied by use_sdpa_composite.
   apply_gpu_composites: bool = False
   # Use a boolean attention mask instead of materializing fp32 mask constants.
-  use_bool_mask: bool = False
+  use_bool_mask: bool | None = None
   # Emit `odml.fused_sdpa_cache_update` for sliding-window (ring buffer)
   # layers: attention over the old cache plus the new tokens and the ring
   # buffer write in one op, so the backend orders the write after every read.
@@ -208,7 +226,7 @@ class ExportableModuleConfig:
   externalize_rope: bool = False
 
   def _normalize_sdpa_composite(self):
-    """Normalizes `use_sdpa_composite` and maps legacy `extra_kwargs` flags.
+    """Normalizes `use_sdpa_composite` and resolves GPU optimization flags.
 
     Historically `use_sdpa_composite_for_prefill` was an undeclared
     `extra_kwargs` flag needed to enable `odml.sdpa_transposed` in the prefill
@@ -232,6 +250,25 @@ class ExportableModuleConfig:
       )
       if legacy_prefill:
         self.use_sdpa_composite = True
+
+    # Fill every unset flag with the master-switch default first and apply the
+    # dependent defaults afterwards, so the result does not depend on the order
+    # of `_GPU_OPTIMIZATION_FLAGS`.
+    unset_flags = [
+        name for name in _GPU_OPTIMIZATION_FLAGS if getattr(self, name) is None
+    ]
+    for name in unset_flags:
+      setattr(self, name, bool(self.apply_gpu_composites))
+    # A composite that consumes a fused projection follows that fusion when it
+    # is left unset, so `fuse_qkv=False` / `fuse_gate_up=False` also turn off
+    # `odml.qkv_norm_rope` / `odml.swiglu` instead of being re-fused for them.
+    if "use_qkv_norm_rope_composite" in unset_flags and not self.fuse_qkv:
+      self.use_qkv_norm_rope_composite = False
+    if "use_swiglu_composite" in unset_flags and not self.fuse_gate_up:
+      self.use_swiglu_composite = False
+    # The GPU magic-number cache length cannot be combined with dynamic shapes.
+    if "enable_gpu_dynamic_cache" in unset_flags and self.enable_dynamic_shape:
+      self.enable_gpu_dynamic_cache = False
 
     if not isinstance(self.use_sdpa_composite, bool):
       raise TypeError(

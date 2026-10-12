@@ -16,6 +16,7 @@
 
 import os
 import types
+from unittest import mock
 from absl.testing import absltest
 from absl.testing import parameterized
 from litert_torch.generative.export_hf.core import export_lib

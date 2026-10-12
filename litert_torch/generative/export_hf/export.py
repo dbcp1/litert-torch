@@ -110,6 +110,7 @@ def export(
     auto_model_override: str | None = None,
     use_jinja_template: bool | None = None,
     bundle_litert_lm: bool | None = None,
+    externalize_weights: bool | None = None,
     experimental_use_mixed_precision: bool | None = None,
     export_vision_encoder: bool | None = None,
     vision_encoder_quantization_recipe: str | None = None,
@@ -202,6 +203,8 @@ def export(
     auto_model_override: Overriding the AutoModel class to use for export.
     use_jinja_template: Whether to use jinja template.
     bundle_litert_lm: Whether to bundle the model as a LiteRT LM file.
+    externalize_weights: Whether to move eligible TFLite weight tensors into a
+      separate `tflite_weights` section when packaging the `.litertlm` file.
     experimental_use_mixed_precision: Whether to enable mixed precision.
     export_vision_encoder: Whether to export the vision encoder.
     vision_encoder_quantization_recipe: The quantization recipe to use for the

@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Tests for SDPA composite normalization and extra_kwargs validation."""
+"""Tests for SDPA composite normalization, GPU optimizations, and extra_kwargs validation."""
 
+from unittest import mock
 import warnings
 
 from absl.testing import parameterized
 from litert_torch.generative.export_hf.core import exportable_module_config
 import torch
+
 from absl.testing import absltest as googletest
 
 ExportableModuleConfig = exportable_module_config.ExportableModuleConfig
@@ -31,14 +33,78 @@ def _config(**kwargs):
 class SdpaCompositeTest(parameterized.TestCase):
 
   def test_defaults_to_false(self):
-    config = _config()
-    self.assertFalse(config.use_sdpa_composite)
+    config = _config(cache_length=4096)
     self.assertFalse(config.apply_gpu_composites)
+    self.assertFalse(config.externalize_weights)
+    for flag_name in exportable_module_config._GPU_OPTIMIZATION_FLAGS:
+      self.assertFalse(getattr(config, flag_name), msg=flag_name)
+    self.assertFalse(config.prefill_logits)
+    self.assertEqual(config.cache_length, 4096)
 
   def test_composite_implies_apply_gpu_composites(self):
     config = _config(use_sdpa_composite=True)
     self.assertTrue(config.use_sdpa_composite)
     self.assertTrue(config.apply_gpu_composites)
+    self.assertFalse(config.use_qkv_norm_rope_composite)
+    self.assertFalse(config.prefill_logits)
+
+  def test_apply_gpu_composites_enables_all_gpu_optimizations(self):
+    config = _config(apply_gpu_composites=True, cache_length=4096)
+    self.assertTrue(config.apply_gpu_composites)
+    for flag_name in exportable_module_config._GPU_OPTIMIZATION_FLAGS:
+      self.assertTrue(getattr(config, flag_name), msg=flag_name)
+    self.assertTrue(config.prefill_logits)
+    self.assertGreater(config.cache_length, 4096)
+    self.assertEqual(config.cache_lengths, [4096])
+
+  def test_apply_gpu_composites_respects_explicit_overrides(self):
+    config = _config(
+        apply_gpu_composites=True,
+        use_short_conv_composite=False,
+        use_sdpa_composite=False,
+        use_bool_mask=False,
+    )
+    self.assertFalse(config.use_short_conv_composite)
+    self.assertFalse(config.use_sdpa_composite)
+    self.assertFalse(config.use_bool_mask)
+    self.assertTrue(config.use_qkv_norm_rope_composite)
+    self.assertTrue(config.use_swiglu_composite)
+    self.assertTrue(config.use_rope_composite)
+
+  def test_apply_gpu_composites_respects_fusion_and_dynamic_shape_flags(self):
+    config = _config(
+        apply_gpu_composites=True,
+        fuse_qkv=False,
+        fuse_gate_up=False,
+        enable_dynamic_shape=True,
+        cache_length=4096,
+    )
+    self.assertFalse(config.fuse_qkv)
+    self.assertFalse(config.use_qkv_norm_rope_composite)
+    self.assertFalse(config.fuse_gate_up)
+    self.assertFalse(config.use_swiglu_composite)
+    self.assertFalse(config.enable_gpu_dynamic_cache)
+    self.assertEqual(config.cache_length, 4096)
+
+  @parameterized.named_parameters(
+      ("defaults", {}),
+      ("no_fuse_qkv", {"fuse_qkv": False}),
+      ("no_fuse_gate_up", {"fuse_gate_up": False}),
+      ("dynamic_shape", {"enable_dynamic_shape": True}),
+  )
+  def test_apply_gpu_composites_resolution_is_order_independent(self, kwargs):
+    flags = exportable_module_config._GPU_OPTIMIZATION_FLAGS
+    expected = _config(apply_gpu_composites=True, **kwargs)
+    with mock.patch.object(
+        exportable_module_config,
+        "_GPU_OPTIMIZATION_FLAGS",
+        tuple(reversed(flags)),
+    ):
+      actual = _config(apply_gpu_composites=True, **kwargs)
+    for flag_name in (*flags, "prefill_logits", "cache_length"):
+      self.assertEqual(
+          getattr(actual, flag_name), getattr(expected, flag_name), flag_name
+      )
 
   def test_non_bool_raises(self):
     with self.assertRaisesRegex(TypeError, "use_sdpa_composite must be bool"):

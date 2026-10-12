@@ -480,6 +480,30 @@ class PatchTest(parameterized.TestCase):
     with patch.patch_lfm2_model(model, export_config):
       self.assertTrue(conv.use_short_conv_composite)
 
+  def test_patch_lfm2_model_with_single_gpu_composites_flag(self):
+    torch.manual_seed(0)
+    config = _get_dummy_lfm2_config()
+    config.vocab_size = 256
+    model = modeling_lfm2.Lfm2ForCausalLM(config).eval()
+
+    export_config = exportable_module_config.ExportableModuleConfig(
+        model="dummy",
+        apply_gpu_composites=True,
+    )
+
+    with patch.patch_lfm2_model(model, export_config):
+      self.assertIsInstance(
+          model.model.layers[0].feed_forward, patch.FusedLfm2MLP
+      )
+      self.assertTrue(model.model.layers[0].feed_forward.use_swiglu_composite)
+      self.assertIsInstance(
+          model.model.layers[1].self_attn, patch.FusedLfm2Attention
+      )
+      self.assertTrue(model.model.layers[1].self_attn.fuse_qkv)
+      self.assertTrue(
+          model.model.layers[1].self_attn.use_qkv_norm_rope_composite
+      )
+
 
 if __name__ == "__main__":
 

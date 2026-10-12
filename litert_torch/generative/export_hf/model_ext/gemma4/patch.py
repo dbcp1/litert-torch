@@ -674,7 +674,7 @@ try:
             )
             fused = FusedGemma4TextAttention(
                 child,
-                fuse_qkv=fuse_qkv,
+                fuse_qkv=fuse_qkv or use_qkv_norm_rope,
                 use_rope_composite=use_rope,
                 use_qkv_norm_rope_composite=use_qkv_norm_rope,
             )

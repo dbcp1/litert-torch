@@ -486,7 +486,7 @@ def package_image_gen_model(
 
   model_path = os.path.join(output_dir, 'model.litertlm')  # pyrefly: ignore[no-matching-overload]
   with open(model_path, 'wb') as f:
-    builder.build(f)
+      builder.build(f)
   return dataclasses.replace(
       exported_model_artifacts,
       litert_lm_model_path=model_path,
@@ -663,7 +663,7 @@ def package_model(
       )
   model_path = os.path.join(output_dir, 'model.litertlm')  # pyrefly: ignore[no-matching-overload]
   with open(model_path, 'wb') as f:
-    builder.build(f)
+      builder.build(f)
   return dataclasses.replace(
       exported_model_artifacts,
       litert_lm_model_path=model_path,
